@@ -74,6 +74,55 @@ def test_refresh_eod_rebuilds_stale_sector_cache(tmp_path):
     assert "旧缓存" not in panel.index
 
 
+def test_refresh_eod_prefers_market_when_fetcher_is_given(tmp_path):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+
+    def daily_fetcher(symbol, start, end):
+        return pd.DataFrame(
+            {
+                "trade_date": pd.date_range("2026-05-20", periods=21).strftime(
+                    "%Y%m%d"
+                ),
+                "close": list(range(10, 31)),
+                "pct_chg": [0.5] * 21,
+                "amount": [1000.0] * 21,
+            }
+        )
+
+    panel = refresh.refresh_eod(
+        start="20260520",
+        end="20260612",
+        daily_fetcher=daily_fetcher,
+        basic_fetcher=refresh.empty_basic_fetcher,
+        limit=3,
+    )
+
+    assert panel["data_quality"].eq("market_snapshot").all()
+    assert panel["signals_confirmed"].all()
+
+
+def test_refresh_eod_falls_back_honestly_when_market_is_empty(tmp_path):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+
+    def empty_fetcher(symbol, start, end):
+        return pd.DataFrame()
+
+    panel = refresh.refresh_eod(
+        start="20260520",
+        end="20260612",
+        daily_fetcher=empty_fetcher,
+        basic_fetcher=empty_fetcher,
+        limit=3,
+    )
+
+    assert panel["data_quality"].eq("seed_static").all()
+    assert (~panel["signals_confirmed"]).all()
+
+
 def test_enrich_stock_panel_with_market_data():
     stock_panel = pd.DataFrame(
         {
@@ -88,10 +137,24 @@ def test_enrich_stock_panel_with_market_data():
     )
     daily = {
         "SH600000": pd.DataFrame(
-            [{"trade_date": "20260612", "close": 11.0, "pct_chg": 2.0, "amount": 1000.0}]
+            [
+                {
+                    "trade_date": "20260612",
+                    "close": 11.0,
+                    "pct_chg": 2.0,
+                    "amount": 1000.0,
+                }
+            ]
         ),
         "SZ000001": pd.DataFrame(
-            [{"trade_date": "20260612", "close": 10.0, "pct_chg": -1.0, "amount": 500.0}]
+            [
+                {
+                    "trade_date": "20260612",
+                    "close": 10.0,
+                    "pct_chg": -1.0,
+                    "amount": 500.0,
+                }
+            ]
         ),
     }
     basics = {
@@ -129,6 +192,37 @@ def test_enrich_stock_panel_with_market_data():
     assert enriched.loc[1, "pe_ttm"] == 7.0
 
 
+def test_enrich_stock_panel_with_market_data_computes_real_trend():
+    stock_panel = pd.DataFrame(
+        {
+            "sector": ["证券"],
+            "symbol": ["SH600000"],
+            "name": ["浦发银行"],
+            "market_cap": [1000.0],
+            "sector_share": [1.0],
+            "index_weight": [0.5],
+            "rank": [1],
+        }
+    )
+    daily = {
+        "SH600000": pd.DataFrame(
+            {
+                "trade_date": pd.date_range("2026-05-01", periods=21).strftime(
+                    "%Y%m%d"
+                ),
+                "close": list(range(10, 31)),
+                "pct_chg": [-0.5] + [1.0] * 20,
+                "amount": [1000.0] * 21,
+            }
+        )
+    }
+
+    enriched = refresh.enrich_stock_panel_with_market_data(stock_panel, daily)
+
+    assert enriched.loc[0, "trend20"] == 1
+    assert enriched.loc[0, "consecutive_up"] == 20
+
+
 def test_build_market_sector_panel_from_stock_market_data():
     stocks = pd.DataFrame(
         {
@@ -140,6 +234,8 @@ def test_build_market_sector_panel_from_stock_market_data():
             "volume_ratio": [1.5, 0.9, 0.8],
             "sector_share": [0.55, 0.45, 1.0],
             "rank": [1, 2, 1],
+            "trend20": [1, -1, -1],
+            "consecutive_up": [3, 1, 0],
         }
     )
 
@@ -149,6 +245,33 @@ def test_build_market_sector_panel_from_stock_market_data():
     assert panel.loc["证券", "fund_flow"] == 1.0
     assert panel.loc["医药", "fund_flow"] == -1.0
     assert "A、B" == panel.loc["证券", "top_leaders"]
+    assert panel.loc["证券", "trend20"] == 0
+    assert panel.loc["证券", "consecutive_up"] == 2
+
+
+def test_build_market_sector_panel_can_use_real_main_inflow():
+    stocks = pd.DataFrame(
+        {
+            "sector": ["证券", "证券"],
+            "name": ["A", "B"],
+            "market_cap": [1000.0, 900.0],
+            "pct_chg": [-2.0, -1.0],
+            "amount": [1000.0, 500.0],
+            "volume_ratio": [1.5, 0.9],
+            "sector_share": [0.55, 0.45],
+            "rank": [1, 2],
+            "trend20": [1, 1],
+            "consecutive_up": [2, 2],
+        }
+    )
+
+    panel = refresh.build_market_sector_panel(
+        stocks,
+        main_inflow_by_sector={"证券": 70_000_000.0},
+    )
+
+    assert panel.loc["证券", "fund_flow"] == 70_000_000.0
+    assert panel.loc["证券", "fund_inflow"]
 
 
 def test_refresh_eod_can_build_market_snapshot(tmp_path):
@@ -229,3 +352,35 @@ def test_akshare_daily_fetcher_normalizes_columns():
     assert list(got.columns) == ["trade_date", "close", "pct_chg", "amount"]
     assert got.loc[0, "trade_date"] == "20240607"
     assert got.loc[0, "pct_chg"] == 1.2
+
+
+def test_refresh_eod_limit_fetches_subset(tmp_path):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+    seen = []
+
+    def daily_fetcher(symbol, start, end):
+        seen.append(symbol)
+        return pd.DataFrame(
+            [{"trade_date": end, "close": 10.0, "pct_chg": 1.0, "amount": 1000.0}]
+        )
+
+    panel = refresh.refresh_eod(
+        start="20260601",
+        end="20260612",
+        force_market=True,
+        daily_fetcher=daily_fetcher,
+        basic_fetcher=refresh.empty_basic_fetcher,
+        limit=5,
+    )
+
+    assert len(seen) == 5
+    assert panel["data_quality"].eq("market_snapshot").all()
+
+
+def test_provider_fetchers_support_akshare():
+    daily_fetcher, basic_fetcher = refresh.provider_fetchers("akshare")
+
+    assert daily_fetcher is refresh.akshare_daily_fetcher
+    assert basic_fetcher is refresh.empty_basic_fetcher

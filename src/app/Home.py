@@ -22,6 +22,20 @@ def render_home():
 
     panel = get_panel()
     stocks = get_stock_panel()
+    signals_confirmed = panel.get("signals_confirmed", False)
+    signals_confirmed = (
+        bool(signals_confirmed.fillna(False).all())
+        if hasattr(signals_confirmed, "fillna")
+        else False
+    )
+    if signals_confirmed:
+        trade_date = "-"
+        if "trade_date" in panel.columns and panel["trade_date"].notna().any():
+            trade_date = str(panel["trade_date"].dropna().max())
+        st.success(f"已接入收盘行情 · 交易日 {trade_date}")
+    else:
+        st.warning("行情未确认：当前展示的是股票池静态结构兜底，不是实时轮动信号。")
+
     top_sector = panel.sort_values("strength", ascending=False).iloc[0]
     note(
         f"先看 {top_sector.name}: {top_sector['state']}。"
@@ -38,12 +52,22 @@ def render_home():
     )
 
     st.subheader("板块云图")
+    market_ready = (
+        signals_confirmed
+        and "amount" in panel.columns
+        and panel["amount"].fillna(0).sum() > 0
+    )
+    value_col = "amount" if market_ready else "total_market_cap"
+    color_col = (
+        "avg_pct_chg" if market_ready and "avg_pct_chg" in panel.columns else "strength"
+    )
+    color_scale = "RdYlGn" if market_ready else "Tealgrn"
     fig = px.treemap(
         panel.reset_index(names="sector"),
         path=["sector"],
-        values="total_market_cap",
-        color="strength",
-        color_continuous_scale="RdYlGn",
+        values=value_col,
+        color=color_col,
+        color_continuous_scale=color_scale,
         hover_data=["state", "stock_count", "top_leaders", "coverage"],
         custom_data=["state", "top_leaders"],
     )
