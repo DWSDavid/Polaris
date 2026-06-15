@@ -1,0 +1,22 @@
+# --- 敏感 / 本地数据，绝不进 git ---
+.env
+data/account/        # 你的账户参数：总资产/负债/持仓/担保比
+data/cache/          # AKShare/Tushare 拉取的行情缓存
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# --- Streamlit ---
+.streamlit/secrets.toml
+
+# --- OS / IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

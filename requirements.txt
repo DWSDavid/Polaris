@@ -1,0 +1,23 @@
+# Polaris 北极星 — A股板块轮动与龙头联动决策平台
+# Python 3.10+ (开发环境实测 3.13 可用)
+
+# --- 数据层 ---
+akshare>=1.14.0          # 免费行情/资金流/板块成分 (MVP 主力数据源)
+tushare>=1.4.0           # 干净的历史/分钟/资金流 (需 TUSHARE_TOKEN)
+pandas>=2.1.0
+numpy>=1.26.0
+pyarrow>=15.0.0          # parquet 本地缓存
+openpyxl>=3.1.0          # 读股票池 Excel
+requests>=2.31.0
+
+# --- 展示层 ---
+streamlit>=1.36.0
+plotly>=5.20.0           # 大盘云图 treemap / 折线 / 热力图
+
+# --- 配置 ---
+python-dotenv>=1.0.0     # 读取 .env 里的 TUSHARE_TOKEN
+
+# --- 开发/测试 ---
+pytest>=8.0.0
+black>=24.0.0
+ruff>=0.4.0
