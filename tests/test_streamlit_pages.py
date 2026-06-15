@@ -44,6 +44,7 @@ def test_home_uses_market_intelligence_workbench():
     assert "stock_history_panel" in home
     assert "summarize_sector_track" in home
     assert "_render_stock_history_chart" in home
+    assert "valuation_label" in home
     assert "st.expander" in home
     assert "polaris-hero" in ui
     assert "--polaris-bg: #10130f" in ui

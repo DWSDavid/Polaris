@@ -116,6 +116,9 @@ def _render_sector_radar(diagnostics):
             "diffusion",
             "trend_label",
             "split_label",
+            "valuation_label",
+            "valuation_coverage",
+            "median_pe_ttm",
             "leader_line",
             "brief",
         ]
@@ -128,6 +131,9 @@ def _render_sector_radar(diagnostics):
             "diffusion": "扩散",
             "trend_label": "1-3周趋势",
             "split_label": "分化",
+            "valuation_label": "估值",
+            "valuation_coverage": "估值覆盖",
+            "median_pe_ttm": "PE中位",
             "leader_line": "龙头",
             "brief": "判断",
         }
@@ -143,6 +149,12 @@ def _render_sector_radar(diagnostics):
                 max_value=1,
                 format="%.0f%%",
             ),
+            "估值覆盖": st.column_config.ProgressColumn(
+                min_value=0,
+                max_value=1,
+                format="%.0f%%",
+            ),
+            "PE中位": st.column_config.NumberColumn(format="%.1f"),
         },
     )
 

@@ -44,6 +44,8 @@ def _sample_stocks():
             "trend20": [1, 1, -1, -1, 1],
             "consecutive_up": [5, 3, 0, 0, 2],
             "stock_role": ["市值龙头", "市值龙头", "中军", "市值龙头", "中军"],
+            "pe_ttm": [42.0, 38.0, 30.0, 7.0, 9.0],
+            "pb": [4.0, 3.5, 2.8, 0.7, 0.8],
         }
     )
 
@@ -57,6 +59,7 @@ def test_sector_diagnostics_explains_money_trend_and_split():
     assert top["money_direction"] == "净流入"
     assert top["trend_label"] == "1-3周上行"
     assert top["split_label"] == "温和分化"
+    assert top["valuation_label"] == "高估值"
     assert "A" in top["leader_line"]
     assert "扩散72%" in top["brief"]
 

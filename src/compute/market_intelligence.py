@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.compute.fundamentals import sector_valuation_snapshot
+
 GROWTH_SECTORS = {"信息技术", "医药卫生", "电信业务"}
 OLD_ECONOMY_SECTORS = {"金融", "能源", "公用事业", "房地产", "主要消费"}
 
@@ -16,9 +18,13 @@ def sector_diagnostics(
     panel = sector_panel.copy()
     if "sector" not in panel.columns:
         panel = panel.reset_index(names="sector")
+    valuation = sector_valuation_snapshot(stock_panel).set_index("sector")
     for sector in panel["sector"].tolist():
         sector_row = panel[panel["sector"] == sector].iloc[0].to_dict()
         stocks = stock_panel[stock_panel["sector"] == sector].copy()
+        valuation_row = (
+            valuation.loc[sector].to_dict() if sector in valuation.index else {}
+        )
         leaders = stocks.sort_values("rank").head(3)
         fund_flow = float(sector_row.get("fund_flow") or 0.0)
         diffusion = float(sector_row.get("diffusion") or 0.0)
@@ -34,6 +40,10 @@ def sector_diagnostics(
             "money_direction": _money_direction(fund_flow),
             "trend_label": _trend_label(trend20, consecutive_up),
             "split_label": _split_label(diffusion, leader_contrib),
+            "median_pe_ttm": valuation_row.get("median_pe_ttm"),
+            "median_pb": valuation_row.get("median_pb"),
+            "valuation_coverage": valuation_row.get("valuation_coverage", 0.0),
+            "valuation_label": valuation_row.get("valuation_label", "估值缺数据"),
             "leader_line": leader_line,
             "brief": _brief(
                 sector,
