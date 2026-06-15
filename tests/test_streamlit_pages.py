@@ -55,3 +55,10 @@ def test_v2_pages_reference_linkage_stats():
     assert "linkage_stats" in linkage
     assert "detect_leader_events" in history
     assert "summarize_linkage_stats" in history
+
+
+def test_risk_page_references_portfolio_offset():
+    risk_page = Path("src/app/pages/2_风险驾驶舱.py").read_text(encoding="utf-8")
+    assert "build_portfolio_exposure" in risk_page
+    assert "portfolio_offset_report" in risk_page
+    assert "sector_diagnostics" in risk_page
