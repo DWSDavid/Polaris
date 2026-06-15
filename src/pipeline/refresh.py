@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.compute import config, indicators
+from src.compute.decision_explain import enrich_decision_explanations
 from src.compute.state_machine import classify_state
 from src.data import cache
 from src.data.universe import load_universe
@@ -98,6 +99,7 @@ def build_universe_panels(path: Path = SEED_UNIVERSE) -> tuple[pd.DataFrame, pd.
         {True: "Top3 市值龙头", False: "板块中军观察"}
     )
     stock_panel = stock_panel.sort_values(["sector", "rank"]).reset_index(drop=True)
+    sector_panel, stock_panel = enrich_decision_explanations(sector_panel, stock_panel)
     return sector_panel, stock_panel
 
 
@@ -270,6 +272,7 @@ def refresh_eod(
         stocks["sector_state"] = stocks["state"]
         stocks["sector_state_note"] = stocks["state_note"]
         stocks = stocks.drop(columns=["strength", "strength_rank", "state", "state_note"])
+        panel, stocks = enrich_decision_explanations(panel, stocks)
 
     cache.write("pipeline", "sector_panel", "latest", panel.reset_index(names="sector"))
     cache.write("pipeline", "stock_panel", "latest", stocks)

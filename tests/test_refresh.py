@@ -35,6 +35,8 @@ def test_build_universe_panels_from_seed():
     assert {"stock_count", "top_leaders", "coverage", "state_note"} <= set(
         sector_panel.columns
     )
+    assert {"risk_level", "action_hint", "watch_points"} <= set(sector_panel.columns)
+    assert {"stock_role", "momentum_flag"} <= set(stock_panel.columns)
     assert sector_panel.loc["主要消费", "stock_count"] == 10
     assert "贵州茅台" in sector_panel.loc["主要消费", "top_leaders"]
 
@@ -165,6 +167,8 @@ def test_refresh_eod_can_build_market_snapshot(tmp_path):
     assert panel["data_quality"].eq("market_snapshot").all()
     assert "pct_chg" in stocks.columns
     assert stocks["market_data_available"].all()
+    assert "stock_role" in stocks.columns
+    assert "risk_level" in panel.columns
 
 
 def test_refresh_eod_keeps_daily_when_basic_is_rate_limited(tmp_path):

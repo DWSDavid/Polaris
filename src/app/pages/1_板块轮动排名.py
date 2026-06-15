@@ -18,6 +18,9 @@ overview = panel[
         "total_market_cap",
         "coverage",
         "leader_contrib",
+        "risk_level",
+        "action_hint",
+        "watch_points",
         "top_leaders",
         "state_note",
     ]
@@ -30,6 +33,9 @@ overview = panel[
         "total_market_cap": "Top10总市值(亿元)",
         "coverage": "Top10覆盖度",
         "leader_contrib": "Top3集中度",
+        "risk_level": "风险级别",
+        "action_hint": "动作提示",
+        "watch_points": "观察点",
         "top_leaders": "前三龙头",
         "state_note": "解释",
     }

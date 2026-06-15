@@ -20,6 +20,8 @@ if sector != "全部":
 if leader_only:
     filtered = filtered[filtered["is_top_leader"]]
 for column in [
+    "stock_role",
+    "momentum_flag",
     "latest_close",
     "pct_chg",
     "amount",
@@ -45,6 +47,8 @@ table = filtered[
         "symbol",
         "name",
         "leader_badge",
+        "stock_role",
+        "momentum_flag",
         "latest_close",
         "pct_chg",
         "amount",
@@ -67,6 +71,8 @@ table = filtered[
         "symbol": "完整代码",
         "name": "股票名称",
         "leader_badge": "角色",
+        "stock_role": "个股分层",
+        "momentum_flag": "人气异动",
         "latest_close": "收盘价",
         "pct_chg": "涨跌幅(%)",
         "amount": "成交额",
