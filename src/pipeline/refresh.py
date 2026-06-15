@@ -101,6 +101,105 @@ def build_universe_panels(path: Path = SEED_UNIVERSE) -> tuple[pd.DataFrame, pd.
     return sector_panel, stock_panel
 
 
+def _latest_row(frame: pd.DataFrame | None) -> dict:
+    if frame is None or frame.empty:
+        return {}
+    if "trade_date" in frame.columns:
+        frame = frame.sort_values("trade_date")
+    return frame.iloc[-1].to_dict()
+
+
+def enrich_stock_panel_with_market_data(
+    stocks: pd.DataFrame,
+    daily_by_symbol: dict[str, pd.DataFrame],
+    basic_by_symbol: dict[str, pd.DataFrame] | None = None,
+) -> pd.DataFrame:
+    basic_by_symbol = basic_by_symbol or {}
+    rows = []
+    for row in stocks.to_dict("records"):
+        symbol = row["symbol"]
+        daily = _latest_row(daily_by_symbol.get(symbol))
+        basic = _latest_row(basic_by_symbol.get(symbol))
+        row.update(
+            {
+                "trade_date": daily.get("trade_date") or basic.get("trade_date"),
+                "latest_close": daily.get("close"),
+                "pct_chg": daily.get("pct_chg", daily.get("pct")),
+                "amount": daily.get("amount"),
+                "turnover_rate": basic.get("turnover_rate"),
+                "volume_ratio": basic.get("volume_ratio"),
+                "pe_ttm": basic.get("pe_ttm"),
+                "pb": basic.get("pb"),
+                "total_mv": basic.get("total_mv"),
+                "circ_mv": basic.get("circ_mv"),
+            }
+        )
+        row["market_data_available"] = pd.notna(row["latest_close"]) or pd.notna(
+            row["pct_chg"]
+        )
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def build_market_sector_panel(stocks: pd.DataFrame) -> pd.DataFrame:
+    def signed_flow(group: pd.DataFrame) -> float:
+        amount = group["amount"].fillna(0)
+        signed = amount.where(group["pct_chg"] > 0, -amount.where(group["pct_chg"] < 0, 0))
+        total = signed.sum()
+        if total > 0:
+            return 1.0
+        if total < 0:
+            return -1.0
+        return 0.0
+
+    grouped = stocks.groupby("sector", sort=True)
+    sector_base = grouped.agg(
+        stock_count=("name", "count"),
+        total_market_cap=("market_cap", "sum"),
+        avg_pct_chg=("pct_chg", "mean"),
+        amount=("amount", "sum"),
+        volume_amp=("volume_ratio", "mean"),
+        coverage=("sector_share", "sum"),
+    )
+    sector_base["top_leaders"] = grouped.apply(
+        lambda g: "、".join(g.sort_values("rank").head(3)["name"].tolist()),
+        include_groups=False,
+    )
+    sector_base["diffusion"] = grouped["pct_chg"].apply(
+        lambda s: float((s > 0).sum() / s.notna().sum()) if s.notna().sum() else 0.0
+    )
+    sector_base["leader_contrib"] = grouped.apply(
+        lambda g: float(
+            g.sort_values("rank").head(3)["amount"].fillna(0).sum()
+            / g["amount"].fillna(0).sum()
+        )
+        if g["amount"].fillna(0).sum() > 0
+        else 0.0,
+        include_groups=False,
+    )
+    sector_base["fund_flow"] = grouped.apply(signed_flow, include_groups=False)
+
+    features = pd.DataFrame(index=sector_base.index)
+    features["relative_return"] = sector_base["avg_pct_chg"].fillna(0)
+    features["volume_amp"] = sector_base["volume_amp"].fillna(1.0)
+    features["fund_flow"] = sector_base["fund_flow"]
+    features["breadth"] = sector_base["diffusion"]
+    features["leader_contrib"] = sector_base["leader_contrib"]
+    features["diffusion"] = sector_base["diffusion"]
+    features["fund_inflow"] = sector_base["fund_flow"] > 0
+    features["trend20"] = sector_base["avg_pct_chg"].fillna(0).apply(
+        lambda value: 1 if value > 0 else -1 if value < 0 else 0
+    )
+    features["consecutive_up"] = (sector_base["avg_pct_chg"].fillna(0) > 0).astype(int)
+
+    panel = build_sector_panel(features)
+    panel = sector_base.drop(
+        columns=["leader_contrib", "fund_flow", "volume_amp", "diffusion"]
+    ).join(panel)
+    panel["data_quality"] = "market_snapshot"
+    return panel
+
+
 def stock_panel() -> pd.DataFrame:
     hit = cache.read("pipeline", "stock_panel", "latest")
     if hit is not None:
@@ -110,13 +209,68 @@ def stock_panel() -> pd.DataFrame:
     return stocks
 
 
-def refresh_eod() -> pd.DataFrame:
+def _fetch_market_data(stocks: pd.DataFrame, start: str, end: str, daily_fetcher, basic_fetcher):
+    daily_by_symbol = {}
+    basic_by_symbol = {}
+    for symbol in stocks["symbol"]:
+        try:
+            daily_by_symbol[symbol] = daily_fetcher(symbol, start, end)
+        except Exception:
+            daily_by_symbol[symbol] = pd.DataFrame()
+        try:
+            basic_by_symbol[symbol] = basic_fetcher(symbol, start, end)
+        except Exception:
+            basic_by_symbol[symbol] = pd.DataFrame()
+    return daily_by_symbol, basic_by_symbol
+
+
+def refresh_eod(
+    start: str | None = None,
+    end: str | None = None,
+    force_market: bool = False,
+    daily_fetcher=None,
+    basic_fetcher=None,
+) -> pd.DataFrame:
     hit = cache.read("pipeline", "sector_panel", "latest")
     required = {"stock_count", "top_leaders", "coverage", "state_note"}
-    if hit is not None and required <= set(hit.columns):
+    if not force_market and hit is not None and required <= set(hit.columns):
         return hit.set_index("sector") if "sector" in hit.columns else hit
 
     panel, stocks = build_universe_panels()
+    if force_market:
+        if start is None or end is None:
+            raise ValueError("start and end are required when force_market=True")
+        if daily_fetcher is None or basic_fetcher is None:
+            from src.data import tushare_client
+
+            daily_fetcher = daily_fetcher or tushare_client.daily
+            basic_fetcher = basic_fetcher or tushare_client.daily_basic
+        daily_by_symbol, basic_by_symbol = _fetch_market_data(
+            stocks,
+            start,
+            end,
+            daily_fetcher,
+            basic_fetcher,
+        )
+        stocks = enrich_stock_panel_with_market_data(
+            stocks,
+            daily_by_symbol,
+            basic_by_symbol,
+        )
+        panel = build_market_sector_panel(stocks)
+        stocks = stocks.merge(
+            panel[["strength", "strength_rank", "state", "state_note"]],
+            left_on="sector",
+            right_index=True,
+            how="left",
+            suffixes=("", "_market"),
+        )
+        stocks["sector_strength"] = stocks["strength"]
+        stocks["sector_strength_rank"] = stocks["strength_rank"]
+        stocks["sector_state"] = stocks["state"]
+        stocks["sector_state_note"] = stocks["state_note"]
+        stocks = stocks.drop(columns=["strength", "strength_rank", "state", "state_note"])
+
     cache.write("pipeline", "sector_panel", "latest", panel.reset_index(names="sector"))
     cache.write("pipeline", "stock_panel", "latest", stocks)
     return panel

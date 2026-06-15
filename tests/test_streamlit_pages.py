@@ -19,3 +19,6 @@ def test_stock_pages_use_stock_panel():
     stock_page = Path("src/app/pages/3_个股观察.py").read_text(encoding="utf-8")
     assert "get_stock_panel" in ranking
     assert "stock_panel" in stock_page
+    assert "pct_chg" in ranking
+    assert "latest_close" in stock_page
+    assert "volume_ratio" in stock_page

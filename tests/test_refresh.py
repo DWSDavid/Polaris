@@ -49,3 +49,146 @@ def test_refresh_eod_uses_seed_universe_when_cache_missing(tmp_path):
     assert "主要消费" in panel.index
     assert cache.exists("pipeline", "sector_panel", "latest")
     assert cache.exists("pipeline", "stock_panel", "latest")
+
+
+def test_enrich_stock_panel_with_market_data():
+    stock_panel = pd.DataFrame(
+        {
+            "sector": ["证券", "证券"],
+            "symbol": ["SH600000", "SZ000001"],
+            "name": ["浦发银行", "平安银行"],
+            "market_cap": [1000.0, 900.0],
+            "sector_share": [0.55, 0.45],
+            "index_weight": [0.5, 0.4],
+            "rank": [1, 2],
+        }
+    )
+    daily = {
+        "SH600000": pd.DataFrame(
+            [{"trade_date": "20260612", "close": 11.0, "pct_chg": 2.0, "amount": 1000.0}]
+        ),
+        "SZ000001": pd.DataFrame(
+            [{"trade_date": "20260612", "close": 10.0, "pct_chg": -1.0, "amount": 500.0}]
+        ),
+    }
+    basics = {
+        "SH600000": pd.DataFrame(
+            [
+                {
+                    "trade_date": "20260612",
+                    "turnover_rate": 1.2,
+                    "volume_ratio": 1.5,
+                    "pe_ttm": 8.0,
+                    "pb": 0.8,
+                    "total_mv": 100000.0,
+                }
+            ]
+        ),
+        "SZ000001": pd.DataFrame(
+            [
+                {
+                    "trade_date": "20260612",
+                    "turnover_rate": 0.8,
+                    "volume_ratio": 0.9,
+                    "pe_ttm": 7.0,
+                    "pb": 0.7,
+                    "total_mv": 90000.0,
+                }
+            ]
+        ),
+    }
+
+    enriched = refresh.enrich_stock_panel_with_market_data(stock_panel, daily, basics)
+
+    assert list(enriched["pct_chg"]) == [2.0, -1.0]
+    assert enriched.loc[0, "latest_close"] == 11.0
+    assert enriched.loc[0, "volume_ratio"] == 1.5
+    assert enriched.loc[1, "pe_ttm"] == 7.0
+
+
+def test_build_market_sector_panel_from_stock_market_data():
+    stocks = pd.DataFrame(
+        {
+            "sector": ["证券", "证券", "医药"],
+            "name": ["A", "B", "C"],
+            "market_cap": [1000.0, 900.0, 800.0],
+            "pct_chg": [2.0, -1.0, -2.0],
+            "amount": [1000.0, 500.0, 300.0],
+            "volume_ratio": [1.5, 0.9, 0.8],
+            "sector_share": [0.55, 0.45, 1.0],
+            "rank": [1, 2, 1],
+        }
+    )
+
+    panel = refresh.build_market_sector_panel(stocks)
+
+    assert panel.loc["证券", "diffusion"] == 0.5
+    assert panel.loc["证券", "fund_flow"] == 1.0
+    assert panel.loc["医药", "fund_flow"] == -1.0
+    assert "A、B" == panel.loc["证券", "top_leaders"]
+
+
+def test_refresh_eod_can_build_market_snapshot(tmp_path):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+
+    def daily_fetcher(symbol, start, end):
+        pct = 2.0 if symbol.endswith("600519") else -0.5
+        return pd.DataFrame(
+            [{"trade_date": end, "close": 10.0, "pct_chg": pct, "amount": 1000.0}]
+        )
+
+    def basic_fetcher(symbol, start, end):
+        return pd.DataFrame(
+            [
+                {
+                    "trade_date": end,
+                    "turnover_rate": 1.0,
+                    "volume_ratio": 1.2,
+                    "pe_ttm": 10.0,
+                    "pb": 1.0,
+                    "total_mv": 100000.0,
+                }
+            ]
+        )
+
+    panel = refresh.refresh_eod(
+        start="20260601",
+        end="20260612",
+        force_market=True,
+        daily_fetcher=daily_fetcher,
+        basic_fetcher=basic_fetcher,
+    )
+    stocks = refresh.stock_panel()
+
+    assert panel["data_quality"].eq("market_snapshot").all()
+    assert "pct_chg" in stocks.columns
+    assert stocks["market_data_available"].all()
+
+
+def test_refresh_eod_keeps_daily_when_basic_is_rate_limited(tmp_path):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+
+    def daily_fetcher(symbol, start, end):
+        return pd.DataFrame(
+            [{"trade_date": end, "close": 10.0, "pct_chg": 1.0, "amount": 1000.0}]
+        )
+
+    def basic_fetcher(symbol, start, end):
+        raise RuntimeError("daily_basic rate limited")
+
+    panel = refresh.refresh_eod(
+        start="20260601",
+        end="20260612",
+        force_market=True,
+        daily_fetcher=daily_fetcher,
+        basic_fetcher=basic_fetcher,
+    )
+    stocks = refresh.stock_panel()
+
+    assert panel["data_quality"].eq("market_snapshot").all()
+    assert stocks["market_data_available"].all()
+    assert stocks["pe_ttm"].isna().all()

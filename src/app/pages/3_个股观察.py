@@ -19,6 +19,17 @@ if sector != "全部":
     filtered = filtered[filtered["sector"] == sector]
 if leader_only:
     filtered = filtered[filtered["is_top_leader"]]
+for column in [
+    "latest_close",
+    "pct_chg",
+    "amount",
+    "turnover_rate",
+    "volume_ratio",
+    "pe_ttm",
+    "pb",
+]:
+    if column not in filtered.columns:
+        filtered[column] = None
 
 summary_cols = st.columns(4)
 summary_cols[0].metric("当前筛选", f"{len(filtered)} 只")
@@ -34,6 +45,13 @@ table = filtered[
         "symbol",
         "name",
         "leader_badge",
+        "latest_close",
+        "pct_chg",
+        "amount",
+        "turnover_rate",
+        "volume_ratio",
+        "pe_ttm",
+        "pb",
         "market_cap",
         "index_weight",
         "sector_share",
@@ -49,6 +67,13 @@ table = filtered[
         "symbol": "完整代码",
         "name": "股票名称",
         "leader_badge": "角色",
+        "latest_close": "收盘价",
+        "pct_chg": "涨跌幅(%)",
+        "amount": "成交额",
+        "turnover_rate": "换手率(%)",
+        "volume_ratio": "量比",
+        "pe_ttm": "PE(TTM)",
+        "pb": "PB",
         "market_cap": "市值(亿元)",
         "index_weight": "指数权重(%)",
         "sector_share": "板块占比",

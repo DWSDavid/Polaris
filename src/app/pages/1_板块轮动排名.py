@@ -39,6 +39,9 @@ st.caption("当前强度来自股票池静态结构；收盘行情接入后会�
 
 sector = st.selectbox("查看板块成分", list(panel.index))
 sector_stocks = stocks[stocks["sector"] == sector].copy()
+for column in ["latest_close", "pct_chg", "amount", "volume_ratio"]:
+    if column not in sector_stocks.columns:
+        sector_stocks[column] = None
 sector_stocks = sector_stocks[
     [
         "rank",
@@ -46,6 +49,10 @@ sector_stocks = sector_stocks[
         "symbol",
         "name",
         "leader_badge",
+        "latest_close",
+        "pct_chg",
+        "amount",
+        "volume_ratio",
         "market_cap",
         "index_weight",
         "sector_share",
@@ -58,6 +65,10 @@ sector_stocks = sector_stocks[
         "symbol": "完整代码",
         "name": "股票名称",
         "leader_badge": "角色",
+        "latest_close": "收盘价",
+        "pct_chg": "涨跌幅(%)",
+        "amount": "成交额",
+        "volume_ratio": "量比",
         "market_cap": "市值(亿元)",
         "index_weight": "指数权重(%)",
         "sector_share": "板块占比",
