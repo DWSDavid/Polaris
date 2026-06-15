@@ -15,6 +15,8 @@ def test_load_universe_schema():
         "name",
         "exchange",
         "market_cap",
+        "index_weight",
+        "sector_share",
         "leader_type",
     } <= set(df.columns)
     assert len(df) == 110
@@ -23,3 +25,5 @@ def test_load_universe_schema():
     row = df[df["code"] == "600519"].iloc[0]
     assert row["sector"] == "主要消费"
     assert row["symbol"] == "SH600519"
+    assert row["index_weight"] > 0
+    assert row["sector_share"] > 0

@@ -12,6 +12,8 @@ _COLMAP = {
     "股票名称": "name",
     "交易所": "exchange",
     "总市值(亿元)": "market_cap",
+    "指数权重(%)": "index_weight",
+    "占板块总市值": "sector_share",
 }
 
 
@@ -20,6 +22,8 @@ def load_universe(path: Path) -> pd.DataFrame:
     df = df.rename(columns=_COLMAP)
     df["code"] = df["code"].astype(str).str.zfill(6)
     df["market_cap"] = pd.to_numeric(df["market_cap"], errors="coerce")
+    df["index_weight"] = pd.to_numeric(df["index_weight"], errors="coerce")
+    df["sector_share"] = pd.to_numeric(df["sector_share"], errors="coerce")
     df["leader_type"] = "market_cap"
     cols = [
         "sector",
@@ -29,6 +33,8 @@ def load_universe(path: Path) -> pd.DataFrame:
         "name",
         "exchange",
         "market_cap",
+        "index_weight",
+        "sector_share",
         "leader_type",
     ]
     return df[cols].reset_index(drop=True)
