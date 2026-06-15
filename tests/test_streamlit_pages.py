@@ -32,6 +32,19 @@ def test_stock_pages_use_stock_panel():
     assert "action_hint" in ranking
 
 
+def test_home_uses_market_intelligence_workbench():
+    home = Path("src/app/Home.py").read_text(encoding="utf-8")
+    ui = Path("src/app/ui.py").read_text(encoding="utf-8")
+
+    assert "sector_diagnostics" in home
+    assert "hedge_alerts" in home
+    assert "build_ai_context" in home
+    assert "generate_chatgpt_brief" in home
+    assert "st.expander" in home
+    assert "polaris-hero" in ui
+    assert "--polaris-bg: #10130f" in ui
+
+
 def test_v2_pages_reference_linkage_stats():
     linkage = Path("src/app/pages/4_龙头联动分析.py").read_text(encoding="utf-8")
     history = Path("src/app/pages/5_历史联动验证.py").read_text(encoding="utf-8")
