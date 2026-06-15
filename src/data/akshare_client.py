@@ -13,7 +13,7 @@ _DAILY_COLS = {
 }
 
 
-def _call_with_retry(fn, *args, attempts: int = 2):
+def _call_with_retry(fn, *args, attempts: int = 3):
     last_error = None
     for _ in range(attempts):
         try:

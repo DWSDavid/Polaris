@@ -29,8 +29,8 @@ def test_daily_hist_retries_transient_failure(tmp_path):
     with patch.object(
         ac,
         "_raw_daily_hist",
-        side_effect=[ConnectionError("temporary"), fake],
+        side_effect=[ConnectionError("temporary"), ConnectionError("again"), fake],
     ) as raw:
         data = ac.daily_hist("SH600519", "20260101", "20260529")
-    assert raw.call_count == 2
+    assert raw.call_count == 3
     assert list(data["close"]) == [10.0]

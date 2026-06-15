@@ -143,6 +143,33 @@ def enrich_stock_panel_with_market_data(
     return pd.DataFrame(rows)
 
 
+def normalize_akshare_daily(raw: pd.DataFrame) -> pd.DataFrame:
+    out = raw.copy()
+    if "date" in out.columns:
+        out["trade_date"] = pd.to_datetime(out["date"]).dt.strftime("%Y%m%d")
+    elif "日期" in out.columns:
+        out["trade_date"] = pd.to_datetime(out["日期"]).dt.strftime("%Y%m%d")
+    if "pct" in out.columns:
+        out["pct_chg"] = out["pct"]
+    elif "涨跌幅" in out.columns:
+        out["pct_chg"] = out["涨跌幅"]
+    if "成交额" in out.columns and "amount" not in out.columns:
+        out["amount"] = out["成交额"]
+    if "收盘" in out.columns and "close" not in out.columns:
+        out["close"] = out["收盘"]
+    return out[["trade_date", "close", "pct_chg", "amount"]]
+
+
+def akshare_daily_fetcher(symbol: str, start: str, end: str) -> pd.DataFrame:
+    from src.data.akshare_client import daily_hist
+
+    return normalize_akshare_daily(daily_hist(symbol, start, end))
+
+
+def empty_basic_fetcher(symbol: str, start: str, end: str) -> pd.DataFrame:
+    return pd.DataFrame()
+
+
 def build_market_sector_panel(stocks: pd.DataFrame) -> pd.DataFrame:
     def signed_flow(group: pd.DataFrame) -> float:
         amount = group["amount"].fillna(0)
@@ -234,7 +261,15 @@ def refresh_eod(
     basic_fetcher=None,
 ) -> pd.DataFrame:
     hit = cache.read("pipeline", "sector_panel", "latest")
-    required = {"stock_count", "top_leaders", "coverage", "state_note"}
+    required = {
+        "stock_count",
+        "top_leaders",
+        "coverage",
+        "state_note",
+        "risk_level",
+        "action_hint",
+        "watch_points",
+    }
     if not force_market and hit is not None and required <= set(hit.columns):
         return hit.set_index("sector") if "sector" in hit.columns else hit
 

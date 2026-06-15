@@ -53,6 +53,27 @@ def test_refresh_eod_uses_seed_universe_when_cache_missing(tmp_path):
     assert cache.exists("pipeline", "stock_panel", "latest")
 
 
+def test_refresh_eod_rebuilds_stale_sector_cache(tmp_path):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+    stale = pd.DataFrame(
+        {
+            "sector": ["旧缓存"],
+            "stock_count": [1],
+            "top_leaders": ["A"],
+            "coverage": [1.0],
+            "state_note": ["missing explanation fields"],
+        }
+    )
+    cache.write("pipeline", "sector_panel", "latest", stale)
+
+    panel = refresh.refresh_eod()
+
+    assert "risk_level" in panel.columns
+    assert "旧缓存" not in panel.index
+
+
 def test_enrich_stock_panel_with_market_data():
     stock_panel = pd.DataFrame(
         {
@@ -196,3 +217,15 @@ def test_refresh_eod_keeps_daily_when_basic_is_rate_limited(tmp_path):
     assert panel["data_quality"].eq("market_snapshot").all()
     assert stocks["market_data_available"].all()
     assert stocks["pe_ttm"].isna().all()
+
+
+def test_akshare_daily_fetcher_normalizes_columns():
+    raw = pd.DataFrame(
+        [{"date": "2024-06-07", "close": 1550.0, "pct": 1.2, "amount": 123.0}]
+    )
+
+    got = refresh.normalize_akshare_daily(raw)
+
+    assert list(got.columns) == ["trade_date", "close", "pct_chg", "amount"]
+    assert got.loc[0, "trade_date"] == "20240607"
+    assert got.loc[0, "pct_chg"] == 1.2
