@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.compute import config, indicators
 from src.compute.decision_explain import enrich_decision_explanations
+from src.compute.rotation_history import build_sector_history, build_stock_history
 from src.compute.state_machine import classify_state
 from src.compute.trend import consecutive_up_days, trend_sign
 from src.data import cache
@@ -348,6 +349,20 @@ def stock_panel() -> pd.DataFrame:
     return stocks
 
 
+def sector_history_panel() -> pd.DataFrame:
+    hit = cache.read("pipeline", "sector_history", "latest")
+    if hit is not None:
+        return hit
+    return pd.DataFrame()
+
+
+def stock_history_panel() -> pd.DataFrame:
+    hit = cache.read("pipeline", "stock_history", "latest")
+    if hit is not None:
+        return hit
+    return pd.DataFrame()
+
+
 def _fetch_market_data(
     stocks: pd.DataFrame, start: str, end: str, daily_fetcher, basic_fetcher
 ):
@@ -428,6 +443,8 @@ def refresh_eod(
             daily_by_symbol,
             basic_by_symbol,
         )
+        sector_history = build_sector_history(stocks, daily_by_symbol)
+        stock_history = build_stock_history(stocks, daily_by_symbol)
         if stocks["market_data_available"].any():
             flows_by_symbol = _fetch_fund_flows(stocks, start, end, fund_flow_fetcher)
             main_inflow_by_sector = aggregate_main_inflow(stocks, flows_by_symbol)
@@ -449,9 +466,15 @@ def refresh_eod(
             panel, stocks = enrich_decision_explanations(panel, stocks)
         else:
             panel, stocks = build_universe_panels()
+            sector_history = pd.DataFrame()
+            stock_history = pd.DataFrame()
 
     cache.write("pipeline", "sector_panel", "latest", panel.reset_index(names="sector"))
     cache.write("pipeline", "stock_panel", "latest", stocks)
+    if "sector_history" in locals() and not sector_history.empty:
+        cache.write("pipeline", "sector_history", "latest", sector_history)
+    if "stock_history" in locals() and not stock_history.empty:
+        cache.write("pipeline", "stock_history", "latest", stock_history)
     return panel
 
 

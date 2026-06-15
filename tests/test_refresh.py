@@ -315,6 +315,40 @@ def test_refresh_eod_can_build_market_snapshot(tmp_path):
     assert "risk_level" in panel.columns
 
 
+def test_refresh_eod_caches_sector_history_track(tmp_path):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+
+    def daily_fetcher(symbol, start, end):
+        return pd.DataFrame(
+            {
+                "trade_date": pd.date_range("2026-06-01", periods=6).strftime("%Y%m%d"),
+                "close": [10, 10.2, 10.4, 10.6, 10.8, 11.0],
+                "pct_chg": [1.0, 1.2, -0.4, 1.4, 1.6, 1.8],
+                "amount": [100.0, 120.0, 90.0, 130.0, 140.0, 150.0],
+            }
+        )
+
+    refresh.refresh_eod(
+        start="20260601",
+        end="20260606",
+        force_market=True,
+        daily_fetcher=daily_fetcher,
+        basic_fetcher=refresh.empty_basic_fetcher,
+        limit=5,
+    )
+
+    history = refresh.sector_history_panel()
+    stock_history = refresh.stock_history_panel()
+    assert not history.empty
+    assert not stock_history.empty
+    assert {"trade_date", "sector", "fund_flow", "diffusion"} <= set(history.columns)
+    assert {"trade_date", "symbol", "close", "pct_chg"} <= set(stock_history.columns)
+    assert cache.exists("pipeline", "sector_history", "latest")
+    assert cache.exists("pipeline", "stock_history", "latest")
+
+
 def test_refresh_eod_keeps_daily_when_basic_is_rate_limited(tmp_path):
     from src.data import cache
 

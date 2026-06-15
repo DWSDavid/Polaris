@@ -8,7 +8,13 @@ from src.compute.market_intelligence import (
     hedge_alerts,
     sector_diagnostics,
 )
-from src.pipeline.refresh import refresh_eod, stock_panel
+from src.compute.rotation_history import summarize_sector_track
+from src.pipeline.refresh import (
+    refresh_eod,
+    sector_history_panel,
+    stock_history_panel,
+    stock_panel,
+)
 
 
 @st.cache_data(ttl=600)
@@ -21,12 +27,24 @@ def get_stock_panel():
     return stock_panel()
 
 
+@st.cache_data(ttl=600)
+def get_sector_history():
+    return sector_history_panel()
+
+
+@st.cache_data(ttl=600)
+def get_stock_history():
+    return stock_history_panel()
+
+
 def render_home():
     st.set_page_config(page_title="Polaris 北极星", layout="wide")
     apply_theme()
 
     panel = get_panel()
     stocks = get_stock_panel()
+    history = get_sector_history()
+    stock_history = get_stock_history()
     diagnostics = sector_diagnostics(panel, stocks)
     alerts = hedge_alerts(diagnostics)
     ai_context = build_ai_context(diagnostics, alerts)
@@ -57,15 +75,17 @@ def render_home():
     elif not signals_confirmed:
         note("当前是静态股票池兜底：先看结构，不要把状态标签当成真实买卖信号。")
 
-    radar_tab, flow_tab, leader_tab, ai_tab = st.tabs(
-        ["板块雷达", "资金/趋势", "龙头展开", "ChatGPT 总结"]
+    radar_tab, flow_tab, history_tab, leader_tab, ai_tab = st.tabs(
+        ["板块雷达", "资金/趋势", "历史跟踪", "龙头展开", "ChatGPT 总结"]
     )
     with radar_tab:
         _render_sector_radar(diagnostics)
     with flow_tab:
         _render_flow_map(diagnostics)
+    with history_tab:
+        _render_history_track(history)
     with leader_tab:
-        _render_leader_expanders(diagnostics, stocks)
+        _render_leader_expanders(diagnostics, stocks, stock_history)
     with ai_tab:
         _render_ai_tab(ai_context)
 
@@ -159,7 +179,61 @@ def _render_flow_map(diagnostics):
     note("横轴看钱往哪走，纵轴看板块内部有多少股票一起动；气泡越大，越依赖前三个龙头。")
 
 
-def _render_leader_expanders(diagnostics, stocks):
+def _render_history_track(history):
+    if history.empty:
+        st.info(
+            "还没有可用的历史轨迹缓存。运行一次 AKShare/Tushare 行情刷新后，这里会显示过去几天/几周的资金和扩散变化。"
+        )
+        return
+
+    summary = summarize_sector_track(history).rename(
+        columns={
+            "sector": "板块",
+            "fund_flow_5d": "5日资金",
+            "fund_flow_15d": "15日资金",
+            "positive_days_15d": "15日强势天数",
+            "current_positive_streak": "当前连强",
+            "latest_diffusion": "最新扩散",
+            "track_label": "轨迹判断",
+        }
+    )
+    st.dataframe(
+        summary,
+        width="stretch",
+        height=280,
+        column_config={
+            "5日资金": st.column_config.NumberColumn(format="%+.0f"),
+            "15日资金": st.column_config.NumberColumn(format="%+.0f"),
+            "最新扩散": st.column_config.ProgressColumn(
+                min_value=0,
+                max_value=1,
+                format="%.0f%%",
+            ),
+        },
+    )
+
+    sectors = sorted(history["sector"].dropna().unique().tolist())
+    selected = st.selectbox("选择板块查看轨迹", sectors)
+    selected_history = history[history["sector"] == selected].sort_values("trade_date")
+    fig = px.line(
+        selected_history,
+        x="trade_date",
+        y=["fund_flow", "diffusion"],
+        markers=True,
+        labels={"value": "资金/扩散", "trade_date": "交易日", "variable": "指标"},
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#f2efe4",
+        height=380,
+    )
+    fig.update_xaxes(gridcolor="#33402f")
+    fig.update_yaxes(gridcolor="#33402f")
+    st.plotly_chart(fig, width="stretch")
+
+
+def _render_leader_expanders(diagnostics, stocks, stock_history):
     for _, sector in diagnostics.head(8).iterrows():
         title = (
             f"{sector['sector']} · {sector['trend_label']} · "
@@ -217,6 +291,50 @@ def _render_leader_expanders(diagnostics, stocks):
                     "量比": st.column_config.NumberColumn(format="%.2f"),
                 },
             )
+            _render_stock_history_chart(sector["sector"], leader_rows, stock_history)
+
+
+def _render_stock_history_chart(sector_name: str, leader_rows, stock_history):
+    if stock_history.empty:
+        st.caption("暂无个股历史缓存；刷新行情后会显示最近走势。")
+        return
+    sector_history = stock_history[stock_history["sector"] == sector_name].copy()
+    if sector_history.empty:
+        st.caption("这个板块暂无个股历史缓存。")
+        return
+    options = leader_rows[["symbol", "name"]].drop_duplicates()
+    labels = {
+        f"{row.symbol} {row.name}": row.symbol
+        for row in options.itertuples()
+        if row.symbol in set(sector_history["symbol"])
+    }
+    if not labels:
+        st.caption("这个板块的龙头暂无历史序列。")
+        return
+    selected_label = st.selectbox(
+        "选择个股走势",
+        list(labels.keys()),
+        key=f"stock-history-{sector_name}",
+    )
+    selected = sector_history[
+        sector_history["symbol"] == labels[selected_label]
+    ].sort_values("trade_date")
+    fig = px.line(
+        selected,
+        x="trade_date",
+        y=["close", "pct_chg", "amount"],
+        markers=True,
+        labels={"value": "数值", "trade_date": "交易日", "variable": "指标"},
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#f2efe4",
+        height=320,
+    )
+    fig.update_xaxes(gridcolor="#33402f")
+    fig.update_yaxes(gridcolor="#33402f")
+    st.plotly_chart(fig, width="stretch")
 
 
 def _render_ai_tab(ai_context: str):

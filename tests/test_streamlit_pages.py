@@ -40,6 +40,10 @@ def test_home_uses_market_intelligence_workbench():
     assert "hedge_alerts" in home
     assert "build_ai_context" in home
     assert "generate_chatgpt_brief" in home
+    assert "sector_history_panel" in home
+    assert "stock_history_panel" in home
+    assert "summarize_sector_track" in home
+    assert "_render_stock_history_chart" in home
     assert "st.expander" in home
     assert "polaris-hero" in ui
     assert "--polaris-bg: #10130f" in ui
