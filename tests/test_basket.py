@@ -35,3 +35,38 @@ def test_evaluate_basket_flags_negative_corr_and_margin_impact():
     assert result["guarantee_after"] > 0
     assert result["per_item"][0]["sector"] == "证券"
     assert result["per_item"][1]["turning_point"] is True
+
+
+def test_evaluate_basket_uses_structural_fallback_when_corr_missing():
+    panel = pd.DataFrame(
+        {
+            "sector": ["证券Ⅱ", "电子"],
+            "state": ["冷启动", "低位修复"],
+            "trend_days": [0, 0],
+            "turning_point": [False, False],
+        }
+    )
+
+    result = basket.evaluate_basket(["证券", "电子"], panel, pd.DataFrame(), {})
+
+    assert result["hedge_score"] > 0.5
+    assert result["hedge_source"] == "structural_fallback"
+    assert result["hedge_pairs"] == [["证券Ⅱ", "电子"]]
+    assert "红色结构性对冲预警" in result["verdict"]
+
+
+def test_evaluate_basket_reports_uncertain_when_corr_missing_without_structural_pair():
+    panel = pd.DataFrame(
+        {
+            "sector": ["证券Ⅱ", "银行"],
+            "state": ["冷启动", "低位修复"],
+            "trend_days": [0, 0],
+            "turning_point": [False, False],
+        }
+    )
+
+    result = basket.evaluate_basket(["证券", "银行"], panel, pd.DataFrame(), {})
+
+    assert result["hedge_score"] == 0.0
+    assert result["hedge_source"] == "unavailable"
+    assert "历史相关性暂不可用" in result["verdict"]

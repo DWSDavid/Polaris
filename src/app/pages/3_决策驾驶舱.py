@@ -88,6 +88,8 @@ def _render_verdict(result: dict) -> None:
         st.error(verdict)
     elif "黄色" in verdict:
         st.warning(verdict)
+    elif "灰色" in verdict:
+        st.info(verdict)
     else:
         st.success(verdict)
 
