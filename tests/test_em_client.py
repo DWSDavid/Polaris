@@ -137,6 +137,29 @@ def test_industry_hist_normalizes_ohlc(tmp_path, monkeypatch):
     assert got.loc[0, "amount"] == 9e9
 
 
+def test_industry_fund_flow_hist_normalizes_daily_flow(tmp_path, monkeypatch):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+    raw = pd.DataFrame(
+        {
+            "日期": ["2026-06-15"],
+            "主力净流入-净额": [2.5e8],
+            "主力净流入-净占比": [3.2],
+            "超大单净流入-净额": [1e8],
+            "大单净流入-净额": [1.5e8],
+        }
+    )
+    monkeypatch.setattr(em, "_raw_industry_fund_flow_hist", lambda sector: raw)
+
+    got = em.industry_fund_flow_hist("银行")
+
+    assert got.loc[0, "sector"] == "银行"
+    assert got.loc[0, "trade_date"] == "2026-06-15"
+    assert got.loc[0, "main_net_inflow"] == 2.5e8
+    assert got.loc[0, "main_net_inflow_pct"] == 3.2
+
+
 def test_eastmoney_clist_uses_http_delay_host(monkeypatch):
     calls = []
 

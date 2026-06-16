@@ -6,6 +6,7 @@ def test_streamlit_pages_exist_and_compile():
     paths = [
         Path("src/app/ui.py"),
         Path("src/app/Home.py"),
+        Path("src/app/pages/1_行业下钻.py"),
         Path("src/app/pages/1_板块轮动排名.py"),
         Path("src/app/pages/2_风险驾驶舱.py"),
         Path("src/app/pages/3_个股观察.py"),
@@ -60,6 +61,19 @@ def test_home_ui_helper_import_contract():
     assert callable(metric_grid)
     assert callable(note)
     assert callable(status_line)
+
+
+def test_industry_drilldown_page_uses_v2_grounded_sources():
+    page = Path("src/app/pages/1_行业下钻.py").read_text(encoding="utf-8")
+
+    assert "industry_fund_flow_hist" in page
+    assert "industry_cons" in page
+    assert "summarize_sector" in page
+    assert "explain_term" in page
+    assert "trend_days" in page
+    assert "turning_point" in page
+    assert "st.expander" in page
+    assert "st.code(" not in page
 
 
 def test_streamlit_theme_uses_dark_workbench_defaults():

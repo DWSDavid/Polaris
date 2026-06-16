@@ -16,6 +16,7 @@ CACHE_TS_COL = "__cached_at"
 
 CLIST_URL = "http://push2delay.eastmoney.com/api/qt/clist/get"
 KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+FFLOW_KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -145,6 +146,18 @@ def industry_hist(sector: str, start: str, end: str, force: bool = False) -> pd.
     return out
 
 
+def industry_fund_flow_hist(sector: str, force: bool = False) -> pd.DataFrame:
+    key = _safe_key(sector)
+    hit = None if force else cache.read(CACHE_SOURCE, "industry_fund_flow_hist", key)
+    if hit is not None:
+        return hit
+    out = _normalize_industry_fund_flow_hist(
+        _raw_industry_fund_flow_hist(sector), sector
+    )
+    cache.write(CACHE_SOURCE, "industry_fund_flow_hist", key, out)
+    return out
+
+
 def market_spot(force: bool = False) -> pd.DataFrame:
     cached = None if force else _read_ttl("market_spot", "latest")
     if cached is not None:
@@ -229,6 +242,50 @@ def _raw_industry_hist(sector: str, start: str, end: str) -> pd.DataFrame:
         "换手率",
     ]
     return out
+
+
+def _raw_industry_fund_flow_hist(sector: str) -> pd.DataFrame:
+    code = _sector_code(sector)
+    params = {
+        "lmt": "0",
+        "klt": "101",
+        "fields1": "f1,f2,f3,f7",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65",
+        "secid": f"90.{code}",
+    }
+    data = _request_json(FFLOW_KLINE_URL, params)
+    rows = data.get("data", {}).get("klines", [])
+    out = pd.DataFrame([item.split(",") for item in rows])
+    if out.empty:
+        return pd.DataFrame()
+    out.columns = [
+        "日期",
+        "主力净流入-净额",
+        "小单净流入-净额",
+        "中单净流入-净额",
+        "大单净流入-净额",
+        "超大单净流入-净额",
+        "主力净流入-净占比",
+        "小单净流入-净占比",
+        "中单净流入-净占比",
+        "大单净流入-净占比",
+        "超大单净流入-净占比",
+        "-",
+        "-",
+        "-",
+        "-",
+    ]
+    return out[
+        [
+            "日期",
+            "主力净流入-净额",
+            "主力净流入-净占比",
+            "超大单净流入-净额",
+            "大单净流入-净额",
+            "中单净流入-净额",
+            "小单净流入-净额",
+        ]
+    ]
 
 
 def _eastmoney_clist(
@@ -347,6 +404,19 @@ def _normalize_industry_hist(raw: pd.DataFrame, sector: str) -> pd.DataFrame:
     out["pct_chg"] = _num(raw, "涨跌幅")
     out["amount"] = _num(raw, "成交额")
     out["turnover"] = _num(raw, "换手率")
+    return out.reset_index(drop=True)
+
+
+def _normalize_industry_fund_flow_hist(raw: pd.DataFrame, sector: str) -> pd.DataFrame:
+    out = pd.DataFrame(index=raw.index)
+    out["sector"] = sector
+    out["trade_date"] = _text(raw, "日期")
+    out["main_net_inflow"] = _num(raw, "主力净流入-净额")
+    out["main_net_inflow_pct"] = _num(raw, "主力净流入-净占比")
+    out["super_large_inflow"] = _num(raw, "超大单净流入-净额")
+    out["large_inflow"] = _num(raw, "大单净流入-净额")
+    out["medium_inflow"] = _num(raw, "中单净流入-净额")
+    out["small_inflow"] = _num(raw, "小单净流入-净额")
     return out.reset_index(drop=True)
 
 
