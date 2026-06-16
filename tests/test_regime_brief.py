@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from src.ai.humanize import assert_no_jargon
 from src.ai.regime_brief import build_regime_prompt, regime_brief
 
 
@@ -23,9 +24,11 @@ def test_build_regime_prompt_contains_style_theme_macro_and_constraints():
 
     for keyword in ["近1年总结", "近3年总结", "风格转换", "利率", "流动性", "政策", "盈利", "当前处于什么风格"]:
         assert keyword in prompt
-    for keyword in ["epochs", "macro", "cn_10y", "northbound_net", "margin_balance", "电子", "钨"]:
+    for keyword in ["风格阶段", "宏观线索", "10年国债", "北向资金", "融资余额", "电子", "钨"]:
         assert keyword in prompt
-    assert "只使用传入 facts" in prompt
+    for keyword in ["epochs", "macro", "cn_10y", "northbound_net", "margin_balance"]:
+        assert keyword not in prompt
+    assert "只使用传入事实" in prompt
     assert "不要编造" in prompt
 
 
@@ -34,3 +37,11 @@ def test_regime_brief_uses_chat_client():
         out = regime_brief({"current": {"style": "大盘占优"}})
 
     assert "大盘占优" in out
+
+
+def test_regime_brief_falls_back_when_model_returns_jargon():
+    with patch("src.ai.ai_client.chat", return_value="current.style=大盘占优"):
+        out = regime_brief({"current": {"style": "大盘占优"}})
+
+    assert "大盘占优" in out
+    assert_no_jargon(out)

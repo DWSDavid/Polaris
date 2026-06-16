@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from src.ai.ai_client import chat
+from src.ai.humanize import assert_no_jargon
 from src.ai.summarize import build_sector_prompt, summarize_sector
 
 
@@ -37,8 +38,10 @@ def test_sector_prompt_includes_thicker_decision_facts():
 
     for keyword in ["周期判断", "资金与分化", "龙头联动", "对冲与担保比", "今日观察"]:
         assert keyword in prompt
-    for keyword in ["historical_analogy", "rotation_flow", "valuation_guard", "hedge_score", "leader_linkage"]:
+    for keyword in ["历史类比", "资金接力", "估值护栏", "对冲度", "龙头联动"]:
         assert keyword in prompt
+    for keyword in ["historical_analogy", "rotation_flow", "valuation_guard", "hedge_score", "leader_linkage"]:
+        assert keyword not in prompt
     assert "80-220" in prompt
 
 
@@ -61,6 +64,26 @@ def test_sector_prompt_guides_cycle_ignition_and_context_judgment():
         assert keyword in prompt
     for keyword in ["北向", "龙虎榜", "研报", "新闻"]:
         assert keyword in prompt
+    assert "position_in_box" not in prompt
+    assert "ignition_flag" not in prompt
+
+
+def test_sector_prompt_is_humanized_and_conclusion_first():
+    prompt = build_sector_prompt(
+        {
+            "sector": "原材料",
+            "position_in_box": 1.0,
+            "ignition_flag": True,
+            "inflow_10d": 30e8,
+        }
+    )
+
+    assert "结论" in prompt
+    assert "箱体位置：顶部" in prompt
+    assert "启动迹象：已出现" in prompt
+    assert "10日主力资金：+30.0亿" in prompt
+    assert "position_in_box" not in prompt
+    assert "ignition_flag" not in prompt
 
 
 def test_summarize_parses_response():
@@ -77,6 +100,23 @@ def test_summarize_parses_response():
         )
 
     assert "电力设备" in out
+
+
+def test_summarize_falls_back_when_model_returns_jargon():
+    with patch("src.ai.ai_client.chat", return_value="position_in_box=1.0，score=4.2"):
+        out = summarize_sector(
+            {
+                "sector": "原材料",
+                "state": "主升扩散",
+                "position_in_box": 1.0,
+                "inflow_10d": 30e8,
+                "top_leaders": "厦门钨业",
+            }
+        )
+
+    assert "原材料" in out
+    assert "箱体位置" in out
+    assert_no_jargon(out)
 
 
 def test_chat_returns_placeholder_without_key(monkeypatch):

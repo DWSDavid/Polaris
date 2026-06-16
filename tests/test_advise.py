@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from src.ai.humanize import assert_no_jargon
 from src.ai.advise import advise, build_advice_prompt
 
 
@@ -37,11 +38,13 @@ def test_prompt_adds_readable_fact_summary_for_model():
 
     prompt = build_advice_prompt(facts)
 
-    assert "当前主线: 证券, 持续6天, 10日资金30.0" in prompt
-    assert "当前持仓: 华泰证券(证券, 主升扩散)" in prompt
-    assert "候选篮子: 证券、电子" in prompt
-    assert "对冲对: 证券↔电子" in prompt
-    assert "今日观察: 观察证券是否继续扩散，电子是否造成组合对冲。" in prompt
+    assert "当前主线：证券" in prompt
+    assert "主线持续：6天" in prompt
+    assert "主线10日资金：+30.0亿" in prompt
+    assert "当前持仓：华泰证券，证券，主升扩散" in prompt
+    assert "候选篮子：证券、电子" in prompt
+    assert "对冲对：证券↔电子" in prompt
+    assert "今日观察：观察证券是否继续扩散，电子是否造成组合对冲。" in prompt
 
 
 def test_prompt_adds_thicker_decision_facts_for_model():
@@ -87,6 +90,8 @@ def test_prompt_includes_cycle_ignition_and_market_context_for_model():
         assert keyword in prompt
     for keyword in ["北向", "龙虎榜", "研报", "新闻"]:
         assert keyword in prompt
+    assert "position_in_box" not in prompt
+    assert "ignition_flag" not in prompt
 
 
 def test_prompt_forbids_false_missing_when_fact_is_present():
@@ -98,7 +103,7 @@ def test_prompt_forbids_false_missing_when_fact_is_present():
         }
     )
 
-    assert "禁止把 facts 中出现的字段说成缺失" in prompt
+    assert "禁止把已经出现的事实说成缺失" in prompt
     assert "资金接力流入" in prompt
     assert "龙头确认" in prompt
     assert "观察证券扩散是否延续" in prompt
@@ -124,8 +129,9 @@ def test_prompt_includes_ranked_investment_directions_for_model():
     )
 
     assert "综合方向排序" in prompt
-    assert "电子(score=4.2" in prompt
-    assert "回避方向: 银行" in prompt
+    assert "电子，综合分4.20" in prompt
+    assert "score=4.2" not in prompt
+    assert "回避方向：银行" in prompt
 
 
 def test_advise_parses():
@@ -141,3 +147,23 @@ def test_advise_parses():
         )
 
     assert "证券" in out
+
+
+def test_advise_falls_back_when_model_returns_jargon():
+    with patch("src.ai.ai_client.chat", return_value="ranked_directions[0].score=4.2"):
+        out = advise(
+            {
+                "ranked_directions": [
+                    {
+                        "sector": "电子",
+                        "score": 4.2,
+                        "reasons": ["中期趋势向上"],
+                    }
+                ],
+                "today_watch": "观察电子扩散是否延续。",
+            }
+        )
+
+    assert "电子" in out
+    assert "结论" in out
+    assert_no_jargon(out)
