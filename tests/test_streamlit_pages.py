@@ -196,6 +196,9 @@ def test_investment_direction_page_connects_synthesis_context_and_ai():
 
     assert "rank_directions" in page
     assert "aggregate_to_groups" in page
+    assert "trust_badge" in page
+    assert "TRUST_DISCLAIMER" in page
+    assert "凭据强度" in page
     assert "direction_score" in page
     assert "advise" in page
     assert "em_context" in page

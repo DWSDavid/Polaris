@@ -13,6 +13,7 @@ from src.compute.divergence import structural_hedge_pairs
 from src.compute.ignition import ignition_flag, ignition_score
 from src.compute.mainline import mainline_score
 from src.compute.synthesis import direction_score, rank_directions
+from src.compute.trust import TRUST_DISCLAIMER, trust_badge, with_disclaimer
 from src.data import em_client, em_context
 from src.data.sector_groups import aggregate_timeline_to_groups, aggregate_to_groups
 from src.pipeline.rotation_timeline import fetch_rotation_timeline
@@ -23,6 +24,7 @@ DEFAULT_HOLDING = {"code": "601688", "name": "华泰证券", "sector": "证券"}
 
 @st.cache_data(ttl=600)
 def get_direction_payload() -> dict:
+    as_of = datetime.now().strftime("%Y-%m-%d %H:%M")
     realtime = _safe_frame(em_client.industry_realtime)
     flow_5d = _safe_frame(em_client.industry_fund_flow, "5日")
     flow_10d = _safe_frame(em_client.industry_fund_flow, "10日")
@@ -41,7 +43,7 @@ def get_direction_payload() -> dict:
     )
     context = _load_context(DEFAULT_HOLDING["code"])
     candidates = _build_direction_facts(panel, group_timeline, context)
-    ranked = rank_directions(candidates)
+    ranked = _attach_trust(rank_directions(candidates), as_of)
     return {
         "panel": panel,
         "fine_panel": fine_panel,
@@ -49,6 +51,7 @@ def get_direction_payload() -> dict:
         "group_timeline": group_timeline,
         "context": context,
         "ranked": ranked,
+        "as_of": as_of,
     }
 
 
@@ -92,6 +95,7 @@ def render_page() -> None:
             }
         ],
         "today_watch": _today_watch(ranked),
+        "trust_note": ranked[0].get("trust_summary", "") if ranked else "",
     }
     ai_text = _safe_advise(ai_facts)
 
@@ -150,6 +154,7 @@ def _render_direction_cards(items: list[dict]) -> None:
             cols[2].metric("20日资金", f"{_yi(item.get('cum_inflow_20d')):+.1f} 亿")
             cols[3].metric("箱体位置", f"{float(item.get('position_in_box', 0) or 0):.0%}")
             st.markdown(state_badge(str(item.get("state", "未知"))), unsafe_allow_html=True)
+            st.caption(f"凭据强度：{item.get('trust_summary', '暂无可信度标签')}")
             st.write(" / ".join(str(reason) for reason in item.get("reasons", [])))
             st.dataframe(
                 pd.DataFrame(
@@ -161,6 +166,7 @@ def _render_direction_cards(items: list[dict]) -> None:
                             "扩散": item.get("diffusion"),
                             "龙头": item.get("top_leaders"),
                             "细分板块": _children_text(item.get("children")),
+                            "凭据强度": item.get("trust_summary"),
                             "对冲惩罚": item.get("hedge_penalty"),
                             "拐点": bool(item.get("turning_point")),
                         }
@@ -306,6 +312,14 @@ def _market_context_summary(context: dict) -> dict:
     }
 
 
+def _attach_trust(items: list[dict], as_of: str) -> list[dict]:
+    trusted = []
+    for item in items:
+        badge = trust_badge(item, as_of=as_of)
+        trusted.append({**item, "trust": badge, "trust_summary": badge["summary"]})
+    return trusted
+
+
 def _histories_from_timeline(timeline: pd.DataFrame) -> dict[str, pd.DataFrame]:
     if timeline.empty:
         return {}
@@ -387,10 +401,10 @@ def _safe_advise(facts: dict) -> str:
     try:
         text = advise(facts, timeout=8)
     except Exception:
-        return _local_ai_fallback(facts)
+        return with_disclaimer(_local_ai_fallback(facts))
     if text.startswith("未配置 AI API Key"):
-        return _local_ai_fallback(facts)
-    return text or _local_ai_fallback(facts)
+        return with_disclaimer(_local_ai_fallback(facts))
+    return with_disclaimer(text or _local_ai_fallback(facts))
 
 
 def _head_values(frame: pd.DataFrame, column: str, limit: int) -> list[str]:
