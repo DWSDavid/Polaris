@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.compute.fundamentals import sector_valuation_snapshot
+from src.compute.fundamentals import sector_valuation_snapshot, valuation_guard
 
 
 def test_sector_valuation_snapshot_labels_median_pe_and_coverage():
@@ -46,3 +46,20 @@ def test_sector_valuation_snapshot_handles_missing_columns():
     assert snapshot.iloc[0]["sector"] == "金融"
     assert snapshot.iloc[0]["valuation_label"] == "估值缺数据"
     assert snapshot.iloc[0]["valuation_coverage"] == 0.0
+
+
+def test_valuation_guard_flags_high_valuation_and_missing_data():
+    high = valuation_guard(
+        {"sector": "电子", "median_pe_ttm": 52.0, "valuation_coverage": 0.9}
+    )
+    missing = valuation_guard(
+        {"sector": "证券", "median_pe_ttm": None, "valuation_coverage": 0.0}
+    )
+    ok = valuation_guard(
+        {"sector": "银行", "median_pe_ttm": 8.0, "valuation_coverage": 0.9}
+    )
+
+    assert high["level"] == "yellow"
+    assert "高估值" in high["message"]
+    assert missing["level"] == "unknown"
+    assert ok["level"] == "green"

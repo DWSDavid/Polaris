@@ -49,3 +49,29 @@ def _valuation_label(median_pe: float | None, coverage: float) -> str:
     if median_pe >= 35:
         return "高估值"
     return "中性估值"
+
+
+def valuation_guard(
+    row: dict | pd.Series,
+    high_pe: float = 35.0,
+    min_coverage: float = 0.3,
+) -> dict:
+    data = dict(row)
+    sector = str(data.get("sector", "当前行业"))
+    coverage = float(data.get("valuation_coverage") or 0.0)
+    median_pe = data.get("median_pe_ttm")
+    if coverage < min_coverage or median_pe is None or pd.isna(median_pe):
+        return {
+            "level": "unknown",
+            "message": f"{sector} 估值覆盖不足，先不要用估值做强判断。",
+        }
+    median_pe = float(median_pe)
+    if median_pe >= high_pe:
+        return {
+            "level": "yellow",
+            "message": f"{sector} 处于高估值区，追高要降低仓位假设。",
+        }
+    return {
+        "level": "green",
+        "message": f"{sector} 估值未触发高位护栏。",
+    }
