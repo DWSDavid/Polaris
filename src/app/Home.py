@@ -15,6 +15,7 @@ from src.pipeline.refresh import (
     stock_history_panel,
     stock_panel,
 )
+from src.pipeline.realtime import safe_realtime_industry_panel
 
 
 @st.cache_data(ttl=600)
@@ -37,6 +38,11 @@ def get_stock_history():
     return stock_history_panel()
 
 
+@st.cache_data(ttl=600)
+def get_realtime_industries():
+    return safe_realtime_industry_panel()
+
+
 def render_home():
     st.set_page_config(page_title="Polaris 北极星", layout="wide")
     apply_theme()
@@ -45,6 +51,7 @@ def render_home():
     stocks = get_stock_panel()
     history = get_sector_history()
     stock_history = get_stock_history()
+    realtime_industries, realtime_error = get_realtime_industries()
     diagnostics = sector_diagnostics(panel, stocks)
     alerts = hedge_alerts(diagnostics)
     ai_context = build_ai_context(diagnostics, alerts)
@@ -52,6 +59,8 @@ def render_home():
     signals_confirmed = _signals_confirmed(panel)
 
     status_line(_status_text(panel, signals_confirmed))
+    if realtime_error:
+        st.warning(f"实时行业快照拉取失败，正在显示上次缓存：{realtime_error}")
     hero(
         f"先看 {top_sector['sector']}，再检查对冲",
         top_sector["brief"],
@@ -75,9 +84,11 @@ def render_home():
     elif not signals_confirmed:
         note("当前是静态股票池兜底：先看结构，不要把状态标签当成真实买卖信号。")
 
-    radar_tab, flow_tab, history_tab, leader_tab, ai_tab = st.tabs(
-        ["板块雷达", "资金/趋势", "历史跟踪", "龙头展开", "ChatGPT 总结"]
+    market_tab, radar_tab, flow_tab, history_tab, leader_tab, ai_tab = st.tabs(
+        ["大盘云图", "板块雷达", "资金/趋势", "历史跟踪", "龙头展开", "ChatGPT 总结"]
     )
+    with market_tab:
+        _render_market_treemap(realtime_industries)
     with radar_tab:
         _render_sector_radar(diagnostics)
     with flow_tab:
@@ -156,6 +167,56 @@ def _render_sector_radar(diagnostics):
             ),
             "PE中位": st.column_config.NumberColumn(format="%.1f"),
         },
+    )
+
+
+def _render_market_treemap(realtime_industries):
+    if realtime_industries.empty:
+        st.info(
+            "暂无实时行业快照。AKShare 接口恢复后，这里会显示东财行业板块大盘云图。"
+        )
+        return
+
+    panel = realtime_industries.copy()
+    value_col = "total_mv" if panel["total_mv"].fillna(0).sum() > 0 else "up_count"
+    fig = px.treemap(
+        panel,
+        path=["industry"],
+        values=value_col,
+        color="pct_chg",
+        color_continuous_scale="RdYlGn",
+        hover_data=[
+            "pct_chg",
+            "fund_flow_yi",
+            "diffusion",
+            "turnover_rate",
+            "leading_stock",
+            "leading_stock_pct_chg",
+        ],
+        custom_data=[
+            "pct_chg",
+            "fund_flow_yi",
+            "diffusion",
+            "leading_stock",
+        ],
+    )
+    fig.update_traces(
+        texttemplate=(
+            "%{label}<br>"
+            "%{customdata[0]:+.2f}% · %{customdata[1]:+.1f}亿<br>"
+            "扩散 %{customdata[2]:.0%} · %{customdata[3]}"
+        )
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#f2efe4",
+        height=560,
+        margin=dict(t=8, l=0, r=0, b=0),
+    )
+    st.plotly_chart(fig, width="stretch")
+    st.caption(
+        "大小=行业总市值，颜色=实时涨跌幅；标签里的资金为东财行业资金流今日主力净流入。"
     )
 
 
@@ -353,8 +414,14 @@ def _render_ai_tab(ai_context: str):
     st.caption(
         "ChatGPT 只会基于下方结构化上下文生成总结；没有给出的新闻和财务数据不会让它猜。"
     )
-    with st.expander("给 ChatGPT 的上下文", expanded=False):
-        st.code(ai_context, language="text")
+    with st.expander("解释口径", expanded=False):
+        st.markdown("""
+            - 冷启动：实时/EOD 数据还没接上时，只能展示股票池结构，不能当买卖信号。
+            - 扩散：行业里上涨股票占比，越高说明不是单一龙头在硬拉。
+            - 主力分化：行业涨但主力资金流出，或只靠少数龙头贡献，后续持续性要打折。
+            - 对冲：成长和老经济方向相反时，组合收益可能互相抵消。
+            - 噪声过滤：Polaris 只展开行业龙头和领先公司，不追每天新冒出来的小票。
+            """)
     if not has_openai_key():
         st.warning(
             "未检测到 OPENAI_API_KEY。设置到 .env 或系统环境变量后，这里会生成 AI 总结。"

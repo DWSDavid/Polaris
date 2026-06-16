@@ -39,6 +39,84 @@ def _norm_daily(df: pd.DataFrame) -> pd.DataFrame:
     return renamed[cols]
 
 
+def _symbol_from_code(code: str) -> str:
+    code = str(code).zfill(6)
+    return f"SH{code}" if code.startswith(("5", "6", "9")) else f"SZ{code}"
+
+
+def _num(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series(pd.NA, index=frame.index, dtype="Float64")
+    return pd.to_numeric(frame[column], errors="coerce")
+
+
+def normalize_realtime_stock_spot(raw: pd.DataFrame) -> pd.DataFrame:
+    out = pd.DataFrame(index=raw.index)
+    out["code"] = raw["代码"].astype(str).str.zfill(6)
+    out["symbol"] = out["code"].map(_symbol_from_code)
+    out["name"] = raw["名称"].astype(str)
+    out["latest_price"] = _num(raw, "最新价")
+    out["pct_chg"] = _num(raw, "涨跌幅")
+    out["amount"] = _num(raw, "成交额")
+    out["volume_ratio"] = _num(raw, "量比")
+    out["turnover_rate"] = _num(raw, "换手率")
+    out["pe_ttm"] = _num(raw, "市盈率-动态")
+    out["pb"] = _num(raw, "市净率")
+    out["total_mv"] = _num(raw, "总市值")
+    out["circ_mv"] = _num(raw, "流通市值")
+    out["speed"] = _num(raw, "涨速")
+    out["five_min_pct_chg"] = _num(raw, "5分钟涨跌")
+    out["data_quality"] = "realtime_snapshot"
+    return out.reset_index(drop=True)
+
+
+def normalize_industry_spot(raw: pd.DataFrame) -> pd.DataFrame:
+    out = pd.DataFrame(index=raw.index)
+    out["industry"] = raw["板块名称"].astype(str)
+    out["industry_code"] = raw["板块代码"].astype(str)
+    out["pct_chg"] = _num(raw, "涨跌幅")
+    out["total_mv"] = _num(raw, "总市值")
+    out["turnover_rate"] = _num(raw, "换手率")
+    out["up_count"] = _num(raw, "上涨家数")
+    out["down_count"] = _num(raw, "下跌家数")
+    out["leading_stock"] = raw.get("领涨股票", pd.Series("-", index=raw.index)).astype(
+        str
+    )
+    out["leading_stock_pct_chg"] = _num(raw, "领涨股票-涨跌幅")
+    out["data_quality"] = "realtime_snapshot"
+    return out.reset_index(drop=True)
+
+
+def normalize_sector_fund_flow(raw: pd.DataFrame) -> pd.DataFrame:
+    out = pd.DataFrame(index=raw.index)
+    out["industry"] = raw["名称"].astype(str)
+    out["today_pct_chg"] = _num(raw, "今日涨跌幅")
+    out["today_main_net_inflow"] = _num(raw, "今日主力净流入-净额")
+    out["today_main_net_inflow_pct"] = _num(raw, "今日主力净流入-净占比")
+    if "今日主力净流入最大股" in raw.columns:
+        out["main_inflow_leader"] = raw["今日主力净流入最大股"].astype(str)
+    return out.reset_index(drop=True)
+
+
+def realtime_stock_spot() -> pd.DataFrame:
+    raw = _call_with_retry(ak.stock_zh_a_spot_em)
+    return normalize_realtime_stock_spot(raw)
+
+
+def realtime_industry_spot() -> pd.DataFrame:
+    raw = _call_with_retry(ak.stock_board_industry_name_em)
+    return normalize_industry_spot(raw)
+
+
+def realtime_industry_fund_flow() -> pd.DataFrame:
+    raw = _call_with_retry(
+        ak.stock_sector_fund_flow_rank,
+        "今日",
+        "行业资金流",
+    )
+    return normalize_sector_fund_flow(raw)
+
+
 def daily_hist(symbol: str, start: str, end: str) -> pd.DataFrame:
     key = f"{symbol}_{start}_{end}"
     hit = cache.read("akshare", "daily", key)
