@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.compute.divergence import hedge_pairs, hedge_score
+
 
 def build_portfolio_exposure(
     holdings: list[dict],
@@ -59,11 +61,22 @@ def build_portfolio_exposure(
     )
 
 
-def portfolio_offset_report(exposure: pd.DataFrame) -> dict:
+def portfolio_offset_report(exposure: pd.DataFrame, corr: pd.DataFrame | None = None) -> dict:
     if exposure.empty:
         return {
             "offset_level": "none",
             "message": "暂无持仓，无法计算组合对冲。",
+        }
+    sectors = exposure["sector"].dropna().astype(str).tolist()
+    pairs = hedge_pairs(sectors, corr, threshold=-0.3) if corr is not None else []
+    if pairs:
+        score = hedge_score(sectors, corr)
+        names = "、".join(f"{left}↔{right}" for left, right in pairs)
+        return {
+            "offset_level": "high" if score >= 0.5 else "medium",
+            "hedge_score": score,
+            "hedge_pairs": pairs,
+            "message": f"组合存在历史负相关对冲：{names}，对冲度约 {score:.0%}，收益可能互相抵消。",
         }
     positive = exposure[exposure["fund_flow_yi"] > 0]
     negative = exposure[exposure["fund_flow_yi"] < 0]

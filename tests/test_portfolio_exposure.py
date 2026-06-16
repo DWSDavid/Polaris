@@ -57,3 +57,28 @@ def test_portfolio_offset_report_flags_opposite_money_directions():
     assert report["offset_level"] == "high"
     assert "金融" in report["message"]
     assert "信息技术" in report["message"]
+
+
+def test_portfolio_offset_report_prefers_negative_correlation_pairs():
+    exposure = pd.DataFrame(
+        {
+            "sector": ["证券", "电子"],
+            "market_value_wan": [100.0, 100.0],
+            "weight": [0.5, 0.5],
+            "fund_flow_yi": [1.0, 1.0],
+            "money_direction": ["净流入", "净流入"],
+            "trend_label": ["主升扩散", "主升扩散"],
+            "split_label": ["正常", "正常"],
+        }
+    )
+    corr = pd.DataFrame(
+        [[1.0, -0.8], [-0.8, 1.0]],
+        index=["证券", "电子"],
+        columns=["证券", "电子"],
+    )
+
+    report = portfolio_offset_report(exposure, corr=corr)
+
+    assert report["offset_level"] == "high"
+    assert report["hedge_score"] > 0.5
+    assert ["证券", "电子"] in report["hedge_pairs"] or ["电子", "证券"] in report["hedge_pairs"]
