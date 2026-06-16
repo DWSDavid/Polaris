@@ -25,14 +25,17 @@ SYSTEM_PROMPT = (
 
 
 def build_sector_prompt(facts: dict) -> str:
-    lines = ["请基于以下真实事实写一段中文板块综述，禁止补充未给出的数字。"]
+    lines = ["请基于以下真实事实写中文板块综述，禁止补充未给出的数字。"]
     for key in FACT_KEYS:
         if key in facts and facts[key] is not None:
             lines.append(f"- {key}: {facts[key]}")
     state = facts.get("state")
     if state:
         lines.append(f"- state_definition: {explain_term(str(state))}")
-    lines.append("输出要求：一句到一小段，说明主线、持续天数、资金和龙头，不给买卖指令。")
+    lines.append(
+        "输出要求：分 3-5 点，80-200 字，说明主线、持续天数、资金、扩散和龙头；"
+        "只给观察倾向，不给买卖指令。"
+    )
     return "\n".join(lines)
 
 
