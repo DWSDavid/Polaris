@@ -36,6 +36,21 @@ def test_timeline_shape_and_rank():
     assert {"week", "sector", "rank"} <= set(wk.columns)
 
 
+def test_timeline_tolerates_missing_flow_column():
+    hist = pd.DataFrame(
+        {
+            "date": ["2026-04-01", "2026-04-02"],
+            "sector": ["证券", "电子"],
+            "pct_chg": [2.0, -1.0],
+            "amount": [5e10, 4e10],
+        }
+    )
+
+    tl = build_rotation_timeline(hist)
+
+    assert tl["main_net_inflow"].tolist() == [0.0, 0.0]
+
+
 def test_fetch_timeline_uses_flow_latest_date_when_clock_is_ahead(monkeypatch):
     from src.pipeline import rotation_timeline as rt
 

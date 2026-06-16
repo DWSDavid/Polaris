@@ -27,11 +27,9 @@ def build_rotation_timeline(hist: pd.DataFrame) -> pd.DataFrame:
     if "date" not in frame.columns and "trade_date" in frame.columns:
         frame["date"] = frame["trade_date"]
     frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    frame["pct_chg"] = pd.to_numeric(frame.get("pct_chg"), errors="coerce").fillna(0.0)
-    frame["amount"] = pd.to_numeric(frame.get("amount"), errors="coerce").fillna(0.0)
-    frame["main_net_inflow"] = pd.to_numeric(
-        frame.get("main_net_inflow"), errors="coerce"
-    ).fillna(0.0)
+    frame["pct_chg"] = _num_column(frame, "pct_chg")
+    frame["amount"] = _num_column(frame, "amount")
+    frame["main_net_inflow"] = _num_column(frame, "main_net_inflow")
     frame = frame.dropna(subset=["date", "sector"]).copy()
     if frame.empty:
         return build_rotation_timeline(pd.DataFrame())
@@ -233,6 +231,12 @@ def fetch_rotation_timeline(days: int = 90, max_sectors: int = 60) -> pd.DataFra
 def _has_industry_hist_cache() -> bool:
     hist_dir = cache.CACHE_DIR / em_client.CACHE_SOURCE / "industry_hist"
     return hist_dir.exists() and any(hist_dir.glob("*.parquet"))
+
+
+def _num_column(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series(0.0, index=frame.index)
+    return pd.to_numeric(frame[column], errors="coerce").fillna(0.0)
 
 
 def _window_from_flow(
