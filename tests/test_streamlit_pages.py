@@ -13,6 +13,7 @@ def test_streamlit_pages_exist_and_compile():
         Path("src/app/pages/1_行业下钻.py"),
         Path("src/app/pages/2_风险驾驶舱.py"),
         Path("src/app/pages/3_决策驾驶舱.py"),
+        Path("src/app/pages/4_板块轮动历史.py"),
     ]
     for path in paths:
         assert path.exists()
@@ -27,6 +28,7 @@ def test_streamlit_navigation_only_contains_v2_pages():
     assert "1_行业下钻.py" in page_names
     assert "2_风险驾驶舱.py" in page_names
     assert "3_决策驾驶舱.py" in page_names
+    assert "4_板块轮动历史.py" in page_names
     assert "1_板块轮动排名.py" not in page_names
     assert "3_个股观察.py" not in page_names
     assert "4_龙头联动分析.py" not in page_names
@@ -140,6 +142,19 @@ def test_industry_drilldown_page_exposes_v22_advanced_signals():
     assert "leader_linkage_report" in page
     assert "turning_point_score" in page
     assert "valuation_guard" in page
+
+
+def test_rotation_history_page_uses_timeline_visuals():
+    page = Path("src/app/pages/4_板块轮动历史.py").read_text(encoding="utf-8")
+
+    assert "fetch_rotation_timeline" in page
+    assert "weekly_rank" in page
+    assert "leader_changes" in page
+    assert "plotly_template" in page
+    assert "px.line" in page
+    assert "px.imshow" in page
+    assert "summarize_sector_track" in page
+    assert "st.code(" not in page
 
 
 def test_industry_drilldown_rotation_table_formats_each_flow_column_once():
