@@ -8,6 +8,7 @@ import streamlit as st
 from src.ai.summarize import summarize_sector
 from src.app.ui import apply_theme, hero, metric_grid, note, status_line
 from src.compute import risk_engine as rk
+from src.compute.exit_signal import exit_flag
 from src.compute.portfolio_exposure import (
     build_portfolio_exposure,
     portfolio_offset_report,
@@ -234,6 +235,9 @@ def _render_ai_summary(holding: dict, sector_panel: pd.DataFrame, ratio: float) 
         "guarantee_ratio": round(ratio, 3),
     }
     st.dataframe(pd.DataFrame([facts]), width="stretch", height=120)
+    flag = exit_flag(row, max_trend_days=7)
+    if flag["exit"]:
+        note(f"考虑减仓：{flag['reason']}")
     try:
         text = summarize_sector(facts)
     except Exception as exc:

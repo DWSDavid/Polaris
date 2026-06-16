@@ -107,6 +107,7 @@ def test_risk_page_references_portfolio_offset():
     risk_page = Path("src/app/pages/2_风险驾驶舱.py").read_text(encoding="utf-8")
     assert "build_portfolio_exposure" in risk_page
     assert "portfolio_offset_report" in risk_page
+    assert "exit_flag" in risk_page
     assert "build_sector_panel_v2" in risk_page
     assert "summarize_sector" in risk_page
     assert "refresh_eod" not in risk_page
@@ -118,4 +119,5 @@ def test_decision_cockpit_uses_basket_engine():
 
     assert "evaluate_basket" in page
     assert "hedge_score" in page
+    assert "exit_flag" in page
     assert "portfolio_offset_report" not in page

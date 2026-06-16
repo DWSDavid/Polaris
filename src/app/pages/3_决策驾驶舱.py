@@ -7,6 +7,7 @@ import streamlit as st
 
 from src.ai.advise import advise
 from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+from src.compute.exit_signal import exit_flag
 from src.data import account, basket, em_client
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -92,8 +93,9 @@ def _render_items(result: dict) -> None:
         return
     st.dataframe(table, width="stretch", height=260)
     for row in table.to_dict("records"):
-        if row.get("turning_point"):
-            note(f"{row['sector']} 出现拐点提醒，先降低追高假设。")
+        flag = exit_flag(row, max_trend_days=7)
+        if flag["exit"]:
+            note(f"考虑减仓：{flag['reason']}")
 
 
 def _render_ai(panel: pd.DataFrame, result: dict, acct: dict) -> None:
