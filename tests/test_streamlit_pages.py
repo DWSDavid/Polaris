@@ -6,31 +6,37 @@ def test_streamlit_pages_exist_and_compile():
     paths = [
         Path("src/app/ui.py"),
         Path("src/app/Home.py"),
+        Path("src/app/pages/0_使用说明.py"),
         Path("src/app/pages/1_行业下钻.py"),
-        Path("src/app/pages/1_板块轮动排名.py"),
         Path("src/app/pages/2_风险驾驶舱.py"),
-        Path("src/app/pages/3_个股观察.py"),
-        Path("src/app/pages/4_龙头联动分析.py"),
-        Path("src/app/pages/5_历史联动验证.py"),
     ]
     for path in paths:
         assert path.exists()
         py_compile.compile(str(path), doraise=True)
 
 
-def test_stock_pages_use_stock_panel():
-    home = Path("src/app/Home.py").read_text(encoding="utf-8")
-    ranking = Path("src/app/pages/1_板块轮动排名.py").read_text(encoding="utf-8")
-    stock_page = Path("src/app/pages/3_个股观察.py").read_text(encoding="utf-8")
-    assert "apply_theme" in home
-    assert "format_percent" in ranking
-    assert "get_stock_panel" in ranking
-    assert "stock_panel" in stock_page
-    assert "pct_chg" in ranking
-    assert "latest_close" in stock_page
-    assert "volume_ratio" in stock_page
-    assert "stock_role" in stock_page
-    assert "action_hint" in ranking
+def test_streamlit_navigation_only_contains_v2_pages():
+    pages_dir = Path("src/app/pages")
+    page_names = {path.name for path in pages_dir.glob("*.py")}
+
+    assert "0_使用说明.py" in page_names
+    assert "1_行业下钻.py" in page_names
+    assert "2_风险驾驶舱.py" in page_names
+    assert "1_板块轮动排名.py" not in page_names
+    assert "3_个股观察.py" not in page_names
+    assert "4_龙头联动分析.py" not in page_names
+    assert "5_历史联动验证.py" not in page_names
+
+
+def test_usage_guide_explains_core_workflow_and_terms():
+    guide = Path("src/app/pages/0_使用说明.py").read_text(encoding="utf-8")
+
+    assert "explain_term" in guide
+    assert "冷启动" in guide
+    assert "主升扩散" in guide
+    assert "龙头孤立" in guide
+    assert "行业下钻" in guide
+    assert "风险驾驶舱" in guide
 
 
 def test_home_uses_market_intelligence_workbench():
@@ -91,16 +97,11 @@ def test_env_example_documents_deepseek_defaults():
     assert "DEEPSEEK_MODEL=deepseek-v4-flash" in text
 
 
-def test_v2_pages_reference_linkage_stats():
-    linkage = Path("src/app/pages/4_龙头联动分析.py").read_text(encoding="utf-8")
-    history = Path("src/app/pages/5_历史联动验证.py").read_text(encoding="utf-8")
-    assert "linkage_stats" in linkage
-    assert "detect_leader_events" in history
-    assert "summarize_linkage_stats" in history
-
-
 def test_risk_page_references_portfolio_offset():
     risk_page = Path("src/app/pages/2_风险驾驶舱.py").read_text(encoding="utf-8")
     assert "build_portfolio_exposure" in risk_page
     assert "portfolio_offset_report" in risk_page
-    assert "sector_diagnostics" in risk_page
+    assert "build_sector_panel_v2" in risk_page
+    assert "summarize_sector" in risk_page
+    assert "refresh_eod" not in risk_page
+    assert "market_intelligence" not in risk_page
