@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from src.app.ui import apply_theme, hero, status_line
+from src.app.ui import apply_theme, hero, page_intro, status_line
 from src.compute.glossary import TERMS, explain_term
 
 
@@ -12,6 +12,10 @@ def render_page() -> None:
     apply_theme()
 
     status_line("v2.0 工作台：先看主线，再下钻行业，最后检查持仓风险。")
+    page_intro(
+        "这页回答：Polaris 每天应该按什么顺序读。",
+        "怎么用：先扫流程，再查名词；遇到冷启动、箱体位置、对冲度这些词时回到这里确认含义。",
+    )
     hero(
         "Polaris 怎么用",
         "这不是自动下单工具。它把东财实时行业、资金流、趋势天数和龙头股池整理成一个中期波段观察面板，人最后决定。",
@@ -29,7 +33,7 @@ def render_page() -> None:
     )
 
     st.subheader("核心概念")
-    terms = ["冷启动", "主升扩散", "龙头孤立", "高位加速", "分歧退潮", "低位修复", "主力分化", "拐点", "对冲度"]
+    terms = ["冷启动", "主升扩散", "龙头孤立", "高位加速", "分歧退潮", "低位修复", "主力分化", "拐点", "箱体位置", "对冲度"]
     for term in terms:
         with st.expander(term):
             st.write(explain_term(term))

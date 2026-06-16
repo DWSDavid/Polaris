@@ -188,6 +188,21 @@ def apply_theme() -> None:
           margin: 5px 0 0;
           max-width: 72rem;
         }
+        .polaris-intro {
+          border: 1px solid var(--polaris-line);
+          border-radius: 7px;
+          background: rgba(33, 38, 45, .72);
+          padding: 12px 14px;
+          margin: 6px 0 14px;
+        }
+        .polaris-intro p {
+          margin: 0;
+          color: var(--polaris-muted);
+          line-height: 1.55;
+        }
+        .polaris-intro strong {
+          color: var(--polaris-ink);
+        }
         .polaris-badge {
           display: inline-flex;
           align-items: center;
@@ -235,6 +250,18 @@ def metric_grid(items: list[tuple[str, str]]) -> None:
     columns = st.columns(len(items))
     for column, (label, value) in zip(columns, items):
         column.metric(label, value)
+
+
+def page_intro(question: str, how_to: str) -> None:
+    st.markdown(
+        f"""
+        <section class="polaris-intro">
+          <p><strong>{html.escape(question)}</strong></p>
+          <p>{html.escape(how_to)}</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def plain_text(value: str) -> str:

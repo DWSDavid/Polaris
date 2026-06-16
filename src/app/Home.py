@@ -10,6 +10,7 @@ from src.app.ui import (
     hero,
     metric_grid,
     note,
+    page_intro,
     plotly_template,
     section,
     state_badge,
@@ -75,6 +76,10 @@ def get_hot_dragon_focus():
 def render_home():
     st.set_page_config(page_title="Polaris 北极星", layout="wide")
     apply_theme()
+    page_intro(
+        "这页回答：今天大类主线是谁，资金和扩散是否支持它。",
+        "怎么用：先看云图确认主线面积和颜色，再用候选表看10日资金、趋势持续和龙头，最后进下钻核对细分板块。",
+    )
 
     try:
         panel = get_sector_panel()

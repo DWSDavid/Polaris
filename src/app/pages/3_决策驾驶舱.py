@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.ai.advise import advise
-from src.app.ui import apply_theme, hero, metric_grid, note, section, status_line
+from src.app.ui import apply_theme, hero, metric_grid, note, page_intro, section, status_line
 from src.compute.exit_signal import exit_flag
 from src.compute.portfolio_exposure import match_sector_name
 from src.data import account, basket, em_client
@@ -28,6 +28,10 @@ def get_decision_panel() -> pd.DataFrame:
 def render_page() -> None:
     st.set_page_config(page_title="Polaris 决策驾驶舱", layout="wide")
     apply_theme()
+    page_intro(
+        "这页回答：3-4个候选方向放在一起会不会互相对冲。",
+        "怎么用：只选最想做的少数行业，先看红黄绿结论，再看每项趋势、拐点和担保比影响。",
+    )
 
     try:
         panel = get_decision_panel()

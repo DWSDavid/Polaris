@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.ai.advise import advise
-from src.app.ui import apply_theme, hero, metric_grid, plotly_template, section, state_badge, status_line
+from src.app.ui import apply_theme, hero, metric_grid, page_intro, plotly_template, section, state_badge, status_line
 from src.compute.cycle import box_range, cum_inflow, midterm_trend, position_in_box
 from src.compute.divergence import structural_hedge_pairs
 from src.compute.ignition import ignition_flag, ignition_score
@@ -55,6 +55,10 @@ def get_direction_payload() -> dict:
 def render_page() -> None:
     st.set_page_config(page_title="Polaris 投资方向", layout="wide")
     apply_theme()
+    page_intro(
+        "这页回答：当前更值得观察的大类方向，以及哪些方向应回避。",
+        "怎么用：先看Top方向和回避方向，再看细分板块、20日资金、箱体位置和对冲惩罚；AI 只解释已算出的事实。",
+    )
 
     try:
         payload = get_direction_payload()

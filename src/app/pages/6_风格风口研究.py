@@ -8,7 +8,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.ai.regime_brief import regime_brief
-from src.app.ui import apply_theme, hero, metric_grid, plotly_template, section, status_line
+from src.app.ui import apply_theme, hero, metric_grid, page_intro, plotly_template, section, status_line
 from src.pipeline.rotation_timeline import fetch_rotation_timeline
 from src.research.regime import detect_epochs, dominant_theme, macro_context, style_spread
 
@@ -29,6 +29,10 @@ def get_regime_payload() -> dict:
 def render_page() -> None:
     st.set_page_config(page_title="Polaris 风格风口研究", layout="wide")
     apply_theme()
+    page_intro(
+        "这页回答：市场更偏大盘防守还是小盘成长，风口在什么大类之间切换。",
+        "怎么用：先看当前风格，再看风格时间线和风口段落；宏观佐证只作解释线索，缺证据就不脑补。",
+    )
 
     try:
         payload = get_regime_payload()

@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.ai.summarize import summarize_sector
-from src.app.ui import apply_theme, hero, metric_grid, note, section, status_line
+from src.app.ui import apply_theme, hero, metric_grid, note, page_intro, section, status_line
 from src.compute import risk_engine as rk
 from src.compute.exit_signal import exit_flag
 from src.compute.portfolio_exposure import (
@@ -52,6 +52,10 @@ def get_v2_sector_panel() -> pd.DataFrame:
 def render_page() -> None:
     st.set_page_config(page_title="Polaris 风险驾驶舱", layout="wide")
     apply_theme()
+    page_intro(
+        "这页回答：当前持仓和融资担保比承受多大回撤压力。",
+        "怎么用：录入华泰证券或你的实际持仓后，先看担保比情景，再看行业暴露和拐点提示，避免用加仓放大风险。",
+    )
 
     acct = account.load()
     holding = {**DEFAULT_HOLDING, **(acct.get("holdings", [{}])[0] if acct.get("holdings") else {})}

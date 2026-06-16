@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from src.app.ui import apply_theme, hero, metric_grid, plotly_template, section, status_line
+from src.app.ui import apply_theme, hero, metric_grid, page_intro, plotly_template, section, status_line
 from src.compute.rotation_history import summarize_sector_track
 from src.data.sector_groups import aggregate_timeline_to_groups
 from src.pipeline.rotation_timeline import (
@@ -27,7 +27,10 @@ def render_page() -> None:
     apply_theme()
 
     status_line("东财行业历史 · 约3个月窗口 · 小时级缓存")
-    st.info("这页回答：过去3个月主线在大类板块之间怎么轮动；带状图越靠上越强，热力图红色代表资金净流入、绿色代表净流出。")
+    page_intro(
+        "这页回答：过去3个月主线在大类板块之间怎么轮动。",
+        "怎么用：带状图越靠上越强；热力图红色代表资金净流入、绿色代表净流出，先看接力顺序再去行业下钻。",
+    )
     timeline = _safe_timeline()
     if timeline.empty:
         hero(

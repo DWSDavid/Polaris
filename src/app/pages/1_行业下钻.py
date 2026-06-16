@@ -12,6 +12,7 @@ from src.app.ui import (
     hero,
     metric_grid,
     note,
+    page_intro,
     plotly_template,
     section,
     state_badge,
@@ -59,6 +60,10 @@ def get_sector_drilldown(sector: str) -> dict[str, pd.DataFrame]:
 def render_page() -> None:
     st.set_page_config(page_title="Polaris 行业下钻", layout="wide")
     apply_theme()
+    page_intro(
+        "这页回答：一个细分行业的趋势、资金和龙头是否还在同向。",
+        "怎么用：选择行业后先看趋势和资金 Track，再展开龙头列表；如果出现拐点或主力分化，降低追高假设。",
+    )
 
     try:
         realtime, flow_5d, flow_10d = get_realtime_inputs()

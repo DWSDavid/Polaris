@@ -105,6 +105,7 @@ def test_home_ui_helper_import_contract():
         hero,
         metric_grid,
         note,
+        page_intro,
         plotly_template,
         section,
         state_badge,
@@ -115,6 +116,7 @@ def test_home_ui_helper_import_contract():
     assert callable(hero)
     assert callable(metric_grid)
     assert callable(note)
+    assert callable(page_intro)
     assert callable(status_line)
     assert callable(state_badge)
     assert callable(card)
@@ -135,6 +137,29 @@ def test_industry_drilldown_page_uses_v2_grounded_sources():
     assert "turning_point" in page
     assert "st.expander" in page
     assert "st.code(" not in page
+
+
+def test_all_pages_surface_a_plain_language_page_intro():
+    paths = [
+        Path("src/app/Home.py"),
+        Path("src/app/pages/0_使用说明.py"),
+        Path("src/app/pages/1_行业下钻.py"),
+        Path("src/app/pages/2_风险驾驶舱.py"),
+        Path("src/app/pages/3_决策驾驶舱.py"),
+        Path("src/app/pages/4_板块轮动历史.py"),
+        Path("src/app/pages/5_投资方向.py"),
+        Path("src/app/pages/6_风格风口研究.py"),
+    ]
+
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        assert "page_intro(" in text
+        assert "这页回答" in text
+        assert "怎么用" in text
+
+    guide = Path("src/app/pages/0_使用说明.py").read_text(encoding="utf-8")
+    assert "箱体位置" in guide
+    assert "对冲度" in guide
 
 
 def test_industry_drilldown_page_exposes_v22_advanced_signals():
