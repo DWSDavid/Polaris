@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime
 
 import pandas as pd
@@ -73,10 +74,37 @@ def refresh_realtime_industry_panel() -> pd.DataFrame:
     return panel
 
 
-def safe_realtime_industry_panel() -> tuple[pd.DataFrame, str | None]:
+def safe_realtime_industry_panel(
+    timeout_seconds: float | None = None,
+) -> tuple[pd.DataFrame, str | None]:
+    if timeout_seconds is not None:
+        return _safe_realtime_industry_panel_with_timeout(timeout_seconds)
+
     try:
         return refresh_realtime_industry_panel(), None
     except Exception as exc:
+        cached = cached_realtime_industry_panel()
+        if not cached.empty:
+            return cached, str(exc)
+        return cached, str(exc)
+
+
+def _safe_realtime_industry_panel_with_timeout(
+    timeout_seconds: float,
+) -> tuple[pd.DataFrame, str | None]:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(refresh_realtime_industry_panel)
+    try:
+        panel = future.result(timeout=timeout_seconds)
+        executor.shutdown(wait=False)
+        return panel, None
+    except TimeoutError:
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        cached = cached_realtime_industry_panel()
+        return cached, f"实时行业快照刷新超时（>{timeout_seconds:g}s），已跳过本轮刷新。"
+    except Exception as exc:
+        executor.shutdown(wait=False, cancel_futures=True)
         cached = cached_realtime_industry_panel()
         if not cached.empty:
             return cached, str(exc)

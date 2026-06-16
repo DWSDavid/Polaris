@@ -24,6 +24,8 @@ copy .env.example .env                              # 填入 TUSHARE_TOKEN
 streamlit run src/app/Home.py
 ```
 
+AI 总结默认走 DeepSeek。在 `.env` 中填入 `DEEPSEEK_API_KEY` 即可；`DEEPSEEK_MODEL` 默认是 `deepseek-v4-flash`，用于快速解释和盘面总结。需要备用 ChatGPT 时再填 `OPENAI_API_KEY`。
+
 ## 五个页面
 
 1. **大盘云图** — 板块热力图(强弱/成交额/资金流/扩散率/领涨龙头)

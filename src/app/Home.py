@@ -2,7 +2,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.app.ui import apply_theme, format_percent, hero, metric_grid, note, status_line
-from src.compute.ai_brief import generate_chatgpt_brief, has_openai_key
+from src.compute.ai_brief import generate_ai_brief, has_ai_key
 from src.compute.market_intelligence import (
     build_ai_context,
     hedge_alerts,
@@ -40,7 +40,7 @@ def get_stock_history():
 
 @st.cache_data(ttl=600)
 def get_realtime_industries():
-    return safe_realtime_industry_panel()
+    return safe_realtime_industry_panel(timeout_seconds=8)
 
 
 def render_home():
@@ -85,7 +85,7 @@ def render_home():
         note("当前是静态股票池兜底：先看结构，不要把状态标签当成真实买卖信号。")
 
     market_tab, radar_tab, flow_tab, history_tab, leader_tab, ai_tab = st.tabs(
-        ["大盘云图", "板块雷达", "资金/趋势", "历史跟踪", "龙头展开", "ChatGPT 总结"]
+        ["大盘云图", "板块雷达", "资金/趋势", "历史跟踪", "龙头展开", "AI 总结"]
     )
     with market_tab:
         _render_market_treemap(realtime_industries)
@@ -412,8 +412,16 @@ def _render_stock_history_chart(sector_name: str, leader_rows, stock_history):
 
 def _render_ai_tab(ai_context: str):
     st.caption(
-        "ChatGPT 只会基于下方结构化上下文生成总结；没有给出的新闻和财务数据不会让它猜。"
+        "DeepSeek 默认用于快速总结和解释；模型只会基于 Polaris 给出的结构化上下文，不会补写未提供的新闻或财务数据。"
     )
+    provider_options = {"DeepSeek 快速总结": "deepseek", "ChatGPT 备用": "openai"}
+    provider_label = st.radio(
+        "AI 引擎",
+        list(provider_options.keys()),
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    provider = provider_options[provider_label]
     with st.expander("解释口径", expanded=False):
         st.markdown("""
             - 冷启动：实时/EOD 数据还没接上时，只能展示股票池结构，不能当买卖信号。
@@ -422,17 +430,18 @@ def _render_ai_tab(ai_context: str):
             - 对冲：成长和老经济方向相反时，组合收益可能互相抵消。
             - 噪声过滤：Polaris 只展开行业龙头和领先公司，不追每天新冒出来的小票。
             """)
-    if not has_openai_key():
+    if not has_ai_key(provider):
+        env_name = "DEEPSEEK_API_KEY" if provider == "deepseek" else "OPENAI_API_KEY"
         st.warning(
-            "未检测到 OPENAI_API_KEY。设置到 .env 或系统环境变量后，这里会生成 AI 总结。"
+            f"未检测到 {env_name}。设置到 .env 或系统环境变量后，这里会生成 AI 总结。"
         )
         return
-    if st.button("生成 ChatGPT 分析", type="primary"):
+    if st.button(f"生成 {provider_label.split()[0]} 分析", type="primary"):
         with st.spinner("生成中"):
             try:
-                st.write(generate_chatgpt_brief(ai_context))
+                st.write(generate_ai_brief(ai_context, provider=provider))
             except Exception as exc:
-                st.error(f"ChatGPT 请求失败：{exc}")
+                st.error(f"{provider_label.split()[0]} 请求失败：{exc}")
 
 
 if __name__ == "__main__":

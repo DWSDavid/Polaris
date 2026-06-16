@@ -1,4 +1,5 @@
 import pandas as pd
+import time
 
 from src.data.akshare_client import (
     normalize_industry_spot,
@@ -145,6 +146,34 @@ def test_safe_realtime_industry_panel_falls_back_to_cache(tmp_path, monkeypatch)
 
     assert panel.loc[0, "industry"] == "银行"
     assert "akshare down" in error
+
+
+def test_safe_realtime_industry_panel_times_out_to_cache(tmp_path, monkeypatch):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+    cached = pd.DataFrame(
+        [
+            {
+                "industry": "电子",
+                "pct_chg": 2.0,
+                "fund_flow_yi": 1.0,
+                "data_quality": "realtime_snapshot",
+            }
+        ]
+    )
+    cache.write("pipeline", "realtime_industry_panel", "latest", cached)
+
+    def slow_refresh():
+        time.sleep(0.05)
+        return pd.DataFrame({"industry": ["通信"]})
+
+    monkeypatch.setattr(realtime, "refresh_realtime_industry_panel", slow_refresh)
+
+    panel, error = realtime.safe_realtime_industry_panel(timeout_seconds=0.01)
+
+    assert panel.loc[0, "industry"] == "电子"
+    assert "超时" in error
 
 
 def test_safe_realtime_industry_panel_returns_empty_when_no_cache(

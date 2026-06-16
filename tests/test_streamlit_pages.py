@@ -39,13 +39,17 @@ def test_home_uses_market_intelligence_workbench():
     assert "sector_diagnostics" in home
     assert "hedge_alerts" in home
     assert "build_ai_context" in home
-    assert "generate_chatgpt_brief" in home
+    assert "generate_ai_brief" in home
+    assert "has_ai_key" in home
+    assert "DeepSeek" in home
+    assert "AI 总结" in home
     assert "sector_history_panel" in home
     assert "stock_history_panel" in home
     assert "summarize_sector_track" in home
     assert "_render_stock_history_chart" in home
     assert "valuation_label" in home
     assert "safe_realtime_industry_panel" in home
+    assert "timeout_seconds=8" in home
     assert "_render_market_treemap" in home
     assert "ttl=600" in home
     assert "st.code(ai_context" not in home
@@ -70,6 +74,13 @@ def test_streamlit_theme_uses_dark_workbench_defaults():
     text = config.read_text(encoding="utf-8")
     assert 'base = "dark"' in text
     assert 'backgroundColor = "#10130f"' in text
+
+
+def test_env_example_documents_deepseek_defaults():
+    text = Path(".env.example").read_text(encoding="utf-8")
+    assert "AI_PROVIDER=deepseek" in text
+    assert "DEEPSEEK_API_KEY=" in text
+    assert "DEEPSEEK_MODEL=deepseek-v4-flash" in text
 
 
 def test_v2_pages_reference_linkage_stats():
