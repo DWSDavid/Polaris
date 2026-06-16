@@ -42,6 +42,27 @@ def test_sector_prompt_includes_thicker_decision_facts():
     assert "80-220" in prompt
 
 
+def test_sector_prompt_guides_cycle_ignition_and_context_judgment():
+    facts = {
+        "sector": "证券",
+        "cycle": {"position_in_box": 0.86, "midterm_trend": 1, "cum_inflow_20d": 5e8},
+        "ignition": {"ignition_flag": True, "ignition_score": 0.72},
+        "market_context": {
+            "northbound": "北向资金平稳",
+            "dragon_tiger": "龙虎榜活跃",
+            "research": "研报维持增持",
+            "news": "新闻提到非银资金流入",
+        },
+    }
+
+    prompt = build_sector_prompt(facts)
+
+    for keyword in ["周期阶段", "中期结构是否完好", "箱体位置", "多周资金", "启动迹象"]:
+        assert keyword in prompt
+    for keyword in ["北向", "龙虎榜", "研报", "新闻"]:
+        assert keyword in prompt
+
+
 def test_summarize_parses_response():
     with patch("src.ai.ai_client.chat", return_value="电力设备主升扩散，已持续9天。"):
         out = summarize_sector(

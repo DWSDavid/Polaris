@@ -16,6 +16,9 @@ FACT_KEYS = [
     "hedge_pairs",
     "guarantee_ratio",
     "leader_linkage",
+    "cycle",
+    "ignition",
+    "market_context",
     "pct_chg",
     "main_net_inflow",
     "inflow_5d",
@@ -44,6 +47,9 @@ def build_sector_prompt(facts: dict) -> str:
         lines.append(f"- state_definition: {explain_term(str(state))}")
     lines.append(
         "输出要求：80-220字，按 5 个决策分点写：周期判断、资金与分化、龙头联动、对冲与担保比、今日观察。"
+        "周期判断必须用箱体位置、MA60/中期趋势、多周资金和启动迹象判断周期阶段（箱体/启动/主升/退潮）以及中期结构是否完好。"
+        "如 facts 提供市场 context，只能结合北向、龙虎榜、研报、新闻做佐证；结构完好时，10%内回撤说明为正常波动。"
+        "禁止把 facts 中出现的字段说成缺失；若字段已出现，必须使用其值。"
         "每一点只引用上方 facts 中已有字段；不编造价格、资金、个股名、新闻或财务数据；只给观察倾向，不给买卖指令。"
     )
     return "\n".join(lines)

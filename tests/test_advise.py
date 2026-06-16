@@ -68,6 +68,42 @@ def test_prompt_adds_thicker_decision_facts_for_model():
     assert "80-220" in prompt
 
 
+def test_prompt_includes_cycle_ignition_and_market_context_for_model():
+    facts = {
+        "mainline": "证券",
+        "cycle": {"position_in_box": 0.86, "midterm_trend": 1, "cum_inflow_20d": 5e8},
+        "ignition": {"ignition_flag": True, "ignition_score": 0.72},
+        "market_context": {
+            "northbound": "北向资金平稳",
+            "dragon_tiger": "龙虎榜活跃",
+            "research": "研报维持增持",
+            "news": "新闻提到非银资金流入",
+        },
+    }
+
+    prompt = build_advice_prompt(facts)
+
+    for keyword in ["周期阶段", "中期结构是否完好", "箱体位置", "多周资金", "启动迹象"]:
+        assert keyword in prompt
+    for keyword in ["北向", "龙虎榜", "研报", "新闻"]:
+        assert keyword in prompt
+
+
+def test_prompt_forbids_false_missing_when_fact_is_present():
+    prompt = build_advice_prompt(
+        {
+            "rotation_flow": {"rotation_label": "资金接力流入", "net_inflow": 2.4},
+            "leader_linkage": {"label": "龙头确认"},
+            "today_watch": "观察证券扩散是否延续。",
+        }
+    )
+
+    assert "禁止把 facts 中出现的字段说成缺失" in prompt
+    assert "资金接力流入" in prompt
+    assert "龙头确认" in prompt
+    assert "观察证券扩散是否延续" in prompt
+
+
 def test_advise_parses():
     with patch("src.ai.ai_client.chat", return_value="1. 大趋势：证券仍是观察主线。"):
         out = advise(

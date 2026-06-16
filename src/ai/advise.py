@@ -13,6 +13,9 @@ SECTION_PROMPT = (
     "请用中文输出 80-220 字，必须按 5 个决策分点："
     "1. 周期判断（大趋势）；2. 资金与分化；3. 龙头联动；"
     "4. 对冲与担保比（结合持仓）；5. 今日观察。"
+    "周期判断必须用箱体位置、MA60/中期趋势、多周资金和启动迹象判断周期阶段（箱体/启动/主升/退潮）以及中期结构是否完好；"
+    "如 facts 提供市场 context，只能结合北向、龙虎榜、研报、新闻做佐证；结构完好时，10%内回撤说明为正常波动。"
+    "禁止把 facts 中出现的字段说成缺失；若字段已出现，必须使用其值。"
     "每一点必须引用下面 facts 中已有字段，不要补充未给出的数字。"
 )
 
@@ -66,12 +69,32 @@ def _readable_summary(facts: dict) -> list[str]:
         )
     if "trend_days" in facts or "mainline_trend_days" in facts:
         lines.append(f"趋势持续: {facts.get('trend_days', facts.get('mainline_trend_days'))} 天")
+    cycle = facts.get("cycle") or {}
+    if cycle:
+        lines.append(
+            "周期结构: "
+            f"箱体位置={cycle.get('position_in_box', '未知')}，"
+            f"中期趋势={cycle.get('midterm_trend', '未知')}，"
+            f"多周资金={cycle.get('cum_inflow_20d', cycle.get('cum_inflow_60d', '未知'))}"
+        )
+    ignition = facts.get("ignition") or {}
+    if ignition:
+        lines.append(
+            "启动迹象: "
+            f"flag={ignition.get('ignition_flag', '未知')}，"
+            f"score={ignition.get('ignition_score', '未知')}"
+        )
+    market_context = facts.get("market_context") or facts.get("context") or {}
+    if market_context:
+        lines.append(f"市场context(北向/龙虎榜/研报/新闻): {_compact_value(market_context)}")
     analogy = facts.get("historical_analogy")
     if analogy:
         lines.append(f"历史类比: {_compact_value(analogy)}")
     rotation = facts.get("rotation_flow")
     if rotation:
-        lines.append(f"资金接力: {_compact_value(rotation)}")
+        label = rotation.get("rotation_label", "未知") if isinstance(rotation, dict) else _compact_value(rotation)
+        net = rotation.get("net_inflow", "未知") if isinstance(rotation, dict) else "未知"
+        lines.append(f"资金接力: {label}，净流入={net}")
     guard = facts.get("valuation_guard")
     if guard:
         lines.append(f"估值护栏: {_compact_value(guard)}")
@@ -79,7 +102,8 @@ def _readable_summary(facts: dict) -> list[str]:
         lines.append(f"对冲度: {facts.get('hedge_score')}")
     linkage = facts.get("leader_linkage")
     if linkage:
-        lines.append(f"龙头联动: {_compact_value(linkage)}")
+        label = linkage.get("label", "未知") if isinstance(linkage, dict) else _compact_value(linkage)
+        lines.append(f"龙头联动: {label}")
     holdings = facts.get("holdings") or []
     if holdings:
         holding_text = "、".join(
