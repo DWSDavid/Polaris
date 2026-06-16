@@ -8,6 +8,25 @@ def test_fine_sector_maps_to_group():
     assert map_to_group("钨") == "原材料"
     assert map_to_group("其他电子Ⅲ") == "电子"
     assert map_to_group("证券") in ("金融", "非银金融")
+    assert map_to_group("数字芯片设计") == "半导体"
+    assert map_to_group("自动化设备") == "机械/电力设备"
+    assert map_to_group("交通运输") == "交通运输"
+    assert map_to_group("建筑装饰") == "建筑建材"
+    assert map_to_group("环保设备Ⅲ") == "环保"
+    assert map_to_group("农林牧渔") == "农业"
+    assert map_to_group("纺织服饰") == "轻工纺服"
+    assert map_to_group("调味发酵品Ⅲ") == "消费"
+    assert map_to_group("光伏发电") == "公用事业"
+    assert map_to_group("航空机场") == "交通运输"
+    assert map_to_group("水务及水治理") == "环保"
+    assert map_to_group("地面兵装Ⅲ") == "军工"
+    assert map_to_group("轮胎轮毂") == "汽车"
+    assert map_to_group("电视广播Ⅲ") == "传媒"
+    assert map_to_group("商业物业经营") == "地产"
+    assert map_to_group("医院") == "医药"
+    assert map_to_group("啤酒") == "消费"
+    assert map_to_group("高速公路") == "交通运输"
+    assert map_to_group("金融控股") == "金融"
 
 
 def test_aggregate_rolls_up():
