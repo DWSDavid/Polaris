@@ -1,6 +1,8 @@
 import pandas as pd
 
 from src.compute.rotation_history import (
+    build_rotation_chain,
+    summarize_flow_rotation,
     build_stock_history,
     build_sector_history,
     summarize_sector_track,
@@ -92,3 +94,37 @@ def test_build_stock_history_keeps_recent_daily_series_with_metadata():
     } <= set(stock.columns)
     assert stock.iloc[-1]["name"] == "A"
     assert stock.iloc[-1]["close"] == 11.4
+
+
+def test_summarize_flow_rotation_marks_inflow_and_outflow():
+    flow = pd.DataFrame(
+        {
+            "trade_date": ["20260601", "20260601", "20260602", "20260602", "20260603", "20260603"],
+            "sector": ["证券", "电子", "证券", "电子", "证券", "电子"],
+            "main_net_inflow": [5e8, -2e8, -1e8, 3e8, -4e8, 6e8],
+        }
+    )
+
+    summary = summarize_flow_rotation(flow, window=3)
+
+    electronics = summary[summary["sector"] == "电子"].iloc[0]
+    securities = summary[summary["sector"] == "证券"].iloc[0]
+    assert electronics["flow_3d"] > 0
+    assert electronics["rotation_label"] == "资金接力流入"
+    assert securities["rotation_label"] == "资金转弱流出"
+
+
+def test_build_rotation_chain_shows_leadership_handoff():
+    flow = pd.DataFrame(
+        {
+            "trade_date": ["20260601", "20260601", "20260602", "20260602", "20260603", "20260603"],
+            "sector": ["证券", "电子", "证券", "电子", "证券", "电子"],
+            "main_net_inflow": [5e8, -2e8, 4e8, 1e8, -1e8, 6e8],
+        }
+    )
+
+    chain = build_rotation_chain(flow, top_n=1)
+
+    assert chain["leaders"] == ["证券", "电子"]
+    assert chain["path"] == "证券→电子"
+    assert "接力" in chain["summary"]

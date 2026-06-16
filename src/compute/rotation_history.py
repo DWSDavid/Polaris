@@ -122,6 +122,69 @@ def summarize_sector_track(
     )
 
 
+def summarize_flow_rotation(flow_history: pd.DataFrame, window: int = 5) -> pd.DataFrame:
+    if flow_history.empty:
+        return pd.DataFrame(
+            columns=[
+                "sector",
+                f"flow_{window}d",
+                "latest_flow",
+                "flow_delta",
+                "rotation_rank",
+                "rotation_label",
+            ]
+        )
+    history = flow_history.copy()
+    history["trade_date"] = history["trade_date"].astype(str)
+    history["main_net_inflow"] = pd.to_numeric(
+        history["main_net_inflow"], errors="coerce"
+    ).fillna(0.0)
+    rows = []
+    for sector, group in history.sort_values("trade_date").groupby("sector", sort=True):
+        recent = group.tail(window)
+        split = max(1, len(recent) // 2)
+        first_half = recent.head(split)["main_net_inflow"].sum()
+        second_half = recent.tail(max(1, len(recent) - split))["main_net_inflow"].sum()
+        total = float(recent["main_net_inflow"].sum())
+        delta = float(second_half - first_half)
+        rows.append(
+            {
+                "sector": sector,
+                f"flow_{window}d": total,
+                "latest_flow": float(recent.iloc[-1]["main_net_inflow"]),
+                "flow_delta": delta,
+                "rotation_label": _rotation_label(total, delta),
+            }
+        )
+    out = pd.DataFrame(rows).sort_values(
+        [f"flow_{window}d", "flow_delta"], ascending=False
+    )
+    out["rotation_rank"] = range(1, len(out) + 1)
+    return out.reset_index(drop=True)
+
+
+def build_rotation_chain(flow_history: pd.DataFrame, top_n: int = 1) -> dict:
+    if flow_history.empty:
+        return {"leaders": [], "path": "", "summary": "资金接力样本不足。"}
+    history = flow_history.copy()
+    history["trade_date"] = history["trade_date"].astype(str)
+    history["main_net_inflow"] = pd.to_numeric(
+        history["main_net_inflow"], errors="coerce"
+    ).fillna(0.0)
+    leaders = []
+    for _, group in history.sort_values("trade_date").groupby("trade_date", sort=True):
+        top = group.sort_values("main_net_inflow", ascending=False).head(top_n)
+        for sector in top["sector"].dropna().astype(str):
+            if not leaders or leaders[-1] != sector:
+                leaders.append(sector)
+    path = "→".join(leaders)
+    if len(leaders) <= 1:
+        summary = f"资金仍集中在{leaders[0]}。" if leaders else "资金接力样本不足。"
+    else:
+        summary = f"资金接力路径：{path}。观察新接力方向是否继续扩散。"
+    return {"leaders": leaders, "path": path, "summary": summary}
+
+
 def _aggregate_sector_day(group: pd.DataFrame) -> pd.Series:
     amount = group["amount"].fillna(0)
     signed_amount = amount.where(
@@ -165,3 +228,15 @@ def _track_label(short_flow: float, positive_days: int, streak: int) -> str:
     if short_flow < 0:
         return "资金转弱"
     return "观察确认"
+
+
+def _rotation_label(total_flow: float, flow_delta: float) -> str:
+    if total_flow <= 0 and flow_delta < 0:
+        return "资金转弱流出"
+    if total_flow > 0 and flow_delta > 0:
+        return "资金接力流入"
+    if total_flow > 0:
+        return "资金仍在流入"
+    if total_flow < 0:
+        return "资金边际修复"
+    return "资金中性"
