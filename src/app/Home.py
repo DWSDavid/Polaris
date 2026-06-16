@@ -18,6 +18,7 @@ from src.app.ui import (
 from src.compute.hot_focus import build_hot_dragon_focus
 from src.compute.mainline import mainline_breakdown, mainline_score, pick_mainline
 from src.data import em_client, em_context
+from src.data.sector_groups import aggregate_to_groups
 from src.data.universe_v2 import build_universe
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -48,13 +49,14 @@ def get_sector_panel():
         except Exception:
             histories[sector] = pd.DataFrame()
     leaders = _build_leaders_for_sectors(leader_sectors)
-    panel = build_sector_panel_v2(
+    fine_panel = build_sector_panel_v2(
         industry_realtime=realtime,
         flow_5d=flow_5d,
         flow_10d=flow_10d,
         histories=histories,
         leaders=leaders,
     )
+    panel = aggregate_to_groups(fine_panel)
     return mainline_score(panel).sort_values(
         ["mainline_score", "strength_rank"], ascending=False
     )
@@ -189,6 +191,7 @@ def _render_candidate_table(panel: pd.DataFrame):
     table["10日净流入(亿)"] = table["inflow_10d"].map(_yi)
     table["今日主力(亿)"] = table["main_net_inflow"].map(_yi)
     table["成交额(亿)"] = table["amount"].map(_yi)
+    table["细分板块"] = table["children"].map(_children_text) if "children" in table.columns else ""
     table = table[
         [
             "sector",
@@ -199,6 +202,7 @@ def _render_candidate_table(panel: pd.DataFrame):
             "pct_chg",
             "diffusion",
             "top_leaders",
+            "细分板块",
             "turning_point",
             "mainline_score",
             "成交额(亿)",
@@ -337,6 +341,7 @@ def _facts(row: pd.Series) -> dict:
         "diffusion": round(float(row.get("diffusion", 0) or 0), 2),
         "turning_point": bool(row.get("turning_point", False)),
         "top_leaders": str(row.get("top_leaders", "")),
+        "children": _children_text(row.get("children", [])),
     }
 
 
@@ -358,6 +363,12 @@ def _yi(value) -> float:
     if pd.isna(value):
         return 0.0
     return float(value) / 100_000_000
+
+
+def _children_text(value, limit: int = 6) -> str:
+    if isinstance(value, (list, tuple, set)):
+        return "、".join(str(item) for item in list(value)[:limit])
+    return str(value or "")
 
 
 if __name__ == "__main__":

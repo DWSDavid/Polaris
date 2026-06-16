@@ -55,6 +55,7 @@ def test_home_uses_market_intelligence_workbench():
     ui = Path("src/app/ui.py").read_text(encoding="utf-8")
 
     assert "build_sector_panel_v2" in home
+    assert "aggregate_to_groups" in home
     assert "build_universe" in home
     assert "leaders=leaders" in home
     assert "summarize_sector" in home
@@ -152,6 +153,7 @@ def test_rotation_history_page_uses_timeline_visuals():
     page = Path("src/app/pages/4_板块轮动历史.py").read_text(encoding="utf-8")
 
     assert "fetch_rotation_timeline" in page
+    assert "aggregate_timeline_to_groups" in page
     assert "weekly_rank" in page
     assert "leader_changes" in page
     assert "plotly_template" in page
@@ -165,6 +167,7 @@ def test_investment_direction_page_connects_synthesis_context_and_ai():
     page = Path("src/app/pages/5_投资方向.py").read_text(encoding="utf-8")
 
     assert "rank_directions" in page
+    assert "aggregate_to_groups" in page
     assert "direction_score" in page
     assert "advise" in page
     assert "em_context" in page

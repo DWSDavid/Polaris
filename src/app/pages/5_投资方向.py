@@ -14,6 +14,7 @@ from src.compute.ignition import ignition_flag, ignition_score
 from src.compute.mainline import mainline_score
 from src.compute.synthesis import direction_score, rank_directions
 from src.data import em_client, em_context
+from src.data.sector_groups import aggregate_timeline_to_groups, aggregate_to_groups
 from src.pipeline.rotation_timeline import fetch_rotation_timeline
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -26,20 +27,29 @@ def get_direction_payload() -> dict:
     flow_5d = _safe_frame(em_client.industry_fund_flow, "5日")
     flow_10d = _safe_frame(em_client.industry_fund_flow, "10日")
     timeline = fetch_rotation_timeline(days=90, max_sectors=24)
+    group_timeline = aggregate_timeline_to_groups(timeline)
     histories = _histories_from_timeline(timeline)
-    panel = build_sector_panel_v2(
+    fine_panel = build_sector_panel_v2(
         industry_realtime=realtime,
         flow_5d=flow_5d,
         flow_10d=flow_10d,
         histories=histories,
     )
+    panel = aggregate_to_groups(fine_panel)
     panel = mainline_score(panel).sort_values(
         ["mainline_score", "strength_rank"], ascending=False
     )
     context = _load_context(DEFAULT_HOLDING["code"])
-    candidates = _build_direction_facts(panel, timeline, context)
+    candidates = _build_direction_facts(panel, group_timeline, context)
     ranked = rank_directions(candidates)
-    return {"panel": panel, "timeline": timeline, "context": context, "ranked": ranked}
+    return {
+        "panel": panel,
+        "fine_panel": fine_panel,
+        "timeline": timeline,
+        "group_timeline": group_timeline,
+        "context": context,
+        "ranked": ranked,
+    }
 
 
 def render_page() -> None:
@@ -74,7 +84,7 @@ def render_page() -> None:
             {
                 "name": DEFAULT_HOLDING["name"],
                 "sector": DEFAULT_HOLDING["sector"],
-                "state": _state_for_holding(payload["panel"]),
+                "state": _state_for_holding(payload.get("fine_panel", payload["panel"])),
             }
         ],
         "today_watch": _today_watch(ranked),
@@ -146,6 +156,7 @@ def _render_direction_cards(items: list[dict]) -> None:
                             "启动分": item.get("ignition_score"),
                             "扩散": item.get("diffusion"),
                             "龙头": item.get("top_leaders"),
+                            "细分板块": _children_text(item.get("children")),
                             "对冲惩罚": item.get("hedge_penalty"),
                             "拐点": bool(item.get("turning_point")),
                         }
@@ -261,6 +272,8 @@ def _build_direction_facts(panel: pd.DataFrame, timeline: pd.DataFrame, context:
                 "diffusion": float(row.get("diffusion", 0) or 0),
                 "mainline_score": float(row.get("mainline_score", 0) or 0),
                 "pct_chg": float(row.get("pct_chg", 0) or 0),
+                "children": row.get("children", []),
+                "stock_count": float(row.get("stock_count", 0) or 0),
             }
         )
     return candidates
@@ -395,6 +408,12 @@ def _yi(value) -> float:
     if value is None or pd.isna(value):
         return 0.0
     return float(value) / 100_000_000
+
+
+def _children_text(value, limit: int = 6) -> str:
+    if isinstance(value, (list, tuple, set)):
+        return "、".join(str(item) for item in list(value)[:limit])
+    return str(value or "")
 
 
 if __name__ == "__main__":

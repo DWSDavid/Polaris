@@ -8,6 +8,7 @@ from src.compute import config, indicators
 from src.compute.state_machine import classify_state
 from src.compute.trend_v2 import streak_days, turning_point_flag
 from src.data import em_client
+from src.data.sector_groups import map_to_group
 
 
 def build_sector_panel_v2(
@@ -36,8 +37,10 @@ def build_sector_panel_v2(
     panel["main_net_inflow"] = _num(panel, "main_net_inflow").fillna(0.0)
     panel["pct_chg"] = _num(panel, "pct_chg").fillna(0.0)
     panel["amount"] = _num(panel, "amount").fillna(0.0)
+    panel["group"] = panel["sector"].map(map_to_group)
 
     total_count = _num(panel, "up_count").fillna(0) + _num(panel, "down_count").fillna(0)
+    panel["stock_count"] = total_count.fillna(0)
     panel["diffusion"] = _num(panel, "up_count").fillna(0).where(
         total_count > 0, 0
     ) / total_count.where(total_count > 0, 1)

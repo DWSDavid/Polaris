@@ -6,6 +6,7 @@ import streamlit as st
 
 from src.app.ui import apply_theme, hero, metric_grid, plotly_template, section, status_line
 from src.compute.rotation_history import summarize_sector_track
+from src.data.sector_groups import aggregate_timeline_to_groups
 from src.pipeline.rotation_timeline import (
     fetch_rotation_timeline,
     leader_changes,
@@ -15,7 +16,8 @@ from src.pipeline.rotation_timeline import (
 
 @st.cache_data(ttl=3600)
 def get_rotation_timeline(days: int = 100, max_sectors: int = 32) -> pd.DataFrame:
-    return fetch_rotation_timeline(days=days, max_sectors=max_sectors)
+    fine_timeline = fetch_rotation_timeline(days=days, max_sectors=max_sectors)
+    return aggregate_timeline_to_groups(fine_timeline)
 
 
 def render_page() -> None:
