@@ -66,7 +66,7 @@ def test_home_uses_market_intelligence_workbench():
     assert "ttl=600" in home
     assert "st.code(" not in home
     assert "polaris-hero" in ui
-    assert "--polaris-bg: #10130f" in ui
+    assert "--polaris-bg: #0E1117" in ui
 
 
 def test_home_ui_helper_import_contract():
@@ -129,7 +129,7 @@ def test_streamlit_theme_uses_dark_workbench_defaults():
     assert config.exists()
     text = config.read_text(encoding="utf-8")
     assert 'base = "dark"' in text
-    assert 'backgroundColor = "#10130f"' in text
+    assert 'backgroundColor = "#0E1117"' in text
 
 
 def test_env_example_documents_deepseek_defaults():
