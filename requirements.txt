@@ -9,6 +9,7 @@ numpy>=1.26.0
 pyarrow>=15.0.0          # parquet 本地缓存
 openpyxl>=3.1.0          # 读股票池 Excel
 requests>=2.31.0
+scikit-learn>=1.5.0      # 可解释模型: LogisticRegression / GradientBoosting / TimeSeriesSplit
 
 # --- 展示层 ---
 streamlit>=1.36.0
