@@ -2,7 +2,9 @@ import pandas as pd
 
 from src.compute.portfolio_exposure import (
     build_portfolio_exposure,
+    match_sector_name,
     portfolio_offset_report,
+    resolve_holding_sector,
 )
 
 
@@ -82,3 +84,64 @@ def test_portfolio_offset_report_prefers_negative_correlation_pairs():
     assert report["offset_level"] == "high"
     assert report["hedge_score"] > 0.5
     assert ["证券", "电子"] in report["hedge_pairs"] or ["电子", "证券"] in report["hedge_pairs"]
+
+
+def test_huatai_maps_to_securities_when_stock_panel_does_not_match():
+    holdings = [
+        {"code": "601688", "name": "华泰证券", "shares": 10.0, "cost": 15.0}
+    ]
+    diagnostics = pd.DataFrame(
+        {
+            "sector": ["证券Ⅱ"],
+            "state": ["主升扩散"],
+            "trend_days": [6],
+            "turning_point": [False],
+            "fund_flow_yi": [30.0],
+            "money_direction": ["净流入"],
+            "trend_label": ["主升扩散 / 6天"],
+            "split_label": ["正常"],
+        }
+    )
+
+    exposure = build_portfolio_exposure(holdings, pd.DataFrame(), diagnostics)
+
+    assert resolve_holding_sector(holdings[0]) == "证券"
+    assert not exposure.empty
+    assert exposure.loc[0, "sector"] == "证券Ⅱ"
+    assert exposure.loc[0, "state"] == "主升扩散"
+    assert exposure.loc[0, "trend_days"] == 6
+    assert exposure.loc[0, "fund_flow_yi"] == 30.0
+
+
+def test_match_sector_name_prefers_securities_level_two():
+    assert match_sector_name("证券", ["证券Ⅲ", "证券Ⅱ"]) == "证券Ⅱ"
+
+
+def test_build_portfolio_exposure_tolerates_missing_diagnostic_columns():
+    holdings = [
+        {"code": "601688", "name": "华泰证券", "shares": 10.0, "cost": 15.0}
+    ]
+    diagnostics = pd.DataFrame({"sector": ["证券Ⅱ"], "state": ["主升扩散"]})
+
+    exposure = build_portfolio_exposure(holdings, pd.DataFrame(), diagnostics)
+
+    assert exposure.loc[0, "sector"] == "证券Ⅱ"
+    assert exposure.loc[0, "fund_flow_yi"] == 0.0
+    assert exposure.loc[0, "money_direction"] == "未知"
+    assert exposure.loc[0, "state"] == "主升扩散"
+
+
+def test_portfolio_offset_report_single_holding_has_no_offset():
+    exposure = pd.DataFrame(
+        {
+            "sector": ["证券"],
+            "market_value_wan": [150.0],
+            "weight": [1.0],
+            "fund_flow_yi": [30.0],
+        }
+    )
+
+    report = portfolio_offset_report(exposure)
+
+    assert report["offset_level"] == "none"
+    assert "单一持仓" in report["message"]

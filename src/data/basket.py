@@ -9,6 +9,7 @@ import pandas as pd
 
 from src.compute import risk_engine
 from src.compute.divergence import hedge_pairs, hedge_score
+from src.compute.portfolio_exposure import match_sector_name
 
 BASKET_PATH = Path("data/account/basket.json")
 
@@ -37,7 +38,14 @@ def evaluate_basket(
     corr: pd.DataFrame,
     account: dict,
 ) -> dict:
-    selected = list(dict.fromkeys(str(item) for item in items if str(item).strip()))
+    available = panel["sector"].dropna().astype(str).tolist() if not panel.empty else []
+    selected = list(
+        dict.fromkeys(
+            str(match_sector_name(str(item), available) or item)
+            for item in items
+            if str(item).strip()
+        )
+    )
     pairs = hedge_pairs(selected, corr, threshold=-0.3)
     score = hedge_score(selected, corr)
     buy_amount = float(account.get("basket_buy_amount") or account.get("buy_amount") or 0.0)

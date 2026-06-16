@@ -8,6 +8,7 @@ import streamlit as st
 from src.ai.advise import advise
 from src.app.ui import apply_theme, hero, metric_grid, note, status_line
 from src.compute.exit_signal import exit_flag
+from src.compute.portfolio_exposure import match_sector_name
 from src.data import account, basket, em_client
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -44,7 +45,13 @@ def render_page() -> None:
     acct = account.load()
     stored = basket.load_basket()
     sectors = panel["sector"].dropna().astype(str).tolist()
-    defaults = [item for item in (stored or ["证券", "电子"]) if item in sectors]
+    defaults = [
+        matched
+        for matched in (
+            match_sector_name(item, sectors) for item in (stored or ["证券", "电子"])
+        )
+        if matched in sectors
+    ]
 
     hero(
         "决策驾驶舱",

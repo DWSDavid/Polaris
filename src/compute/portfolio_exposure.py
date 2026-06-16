@@ -6,6 +6,10 @@ import pandas as pd
 
 from src.compute.divergence import hedge_pairs, hedge_score
 
+STOCK_SECTOR_OVERRIDES = {
+    "601688": "证券",
+}
+
 
 def build_portfolio_exposure(
     holdings: list[dict],
@@ -29,13 +33,18 @@ def build_portfolio_exposure(
     for holding in holdings:
         code = str(holding.get("code", "")).zfill(6)
         stock = stock_lookup.get(code)
-        if stock is None:
+        sector = resolve_holding_sector(holding)
+        if not sector and stock is not None:
+            sector = stock.get("sector")
+        available_sectors = diagnostics["sector"] if "sector" in diagnostics.columns else []
+        sector = match_sector_name(sector, available_sectors) if sector else sector
+        if not sector:
             continue
         shares = float(holding.get("shares") or 0.0)
         price = float(holding.get("price") or holding.get("cost") or 0.0)
         rows.append(
             {
-                "sector": stock["sector"],
+                "sector": sector,
                 "market_value_wan": shares * price,
             }
         )
@@ -44,21 +53,31 @@ def build_portfolio_exposure(
     exposure = pd.DataFrame(rows).groupby("sector", as_index=False).sum()
     total = exposure["market_value_wan"].sum()
     exposure["weight"] = exposure["market_value_wan"] / total if total else 0.0
-    diag_cols = [
-        "sector",
+    diag_cols = ["sector"]
+    desired_cols = [
         "fund_flow_yi",
         "money_direction",
         "trend_label",
         "split_label",
+        "state",
+        "trend_days",
+        "turning_point",
     ]
-    return exposure.merge(diagnostics[diag_cols], on="sector", how="left").fillna(
-        {
-            "fund_flow_yi": 0.0,
-            "money_direction": "未知",
-            "trend_label": "未知",
-            "split_label": "未知",
-        }
-    )
+    diag_cols.extend([col for col in desired_cols if col in diagnostics.columns])
+    merged = exposure.merge(diagnostics[diag_cols], on="sector", how="left")
+    fill_values = {
+        "fund_flow_yi": 0.0,
+        "money_direction": "未知",
+        "trend_label": "未知",
+        "split_label": "未知",
+        "state": "未知",
+        "trend_days": 0,
+        "turning_point": False,
+    }
+    for col, fallback in fill_values.items():
+        if col not in merged.columns:
+            merged[col] = fallback
+    return merged.fillna(fill_values)
 
 
 def portfolio_offset_report(exposure: pd.DataFrame, corr: pd.DataFrame | None = None) -> dict:
@@ -66,6 +85,12 @@ def portfolio_offset_report(exposure: pd.DataFrame, corr: pd.DataFrame | None = 
         return {
             "offset_level": "none",
             "message": "暂无持仓，无法计算组合对冲。",
+        }
+    if exposure["sector"].dropna().astype(str).nunique() <= 1:
+        sector = str(exposure["sector"].dropna().iloc[0]) if "sector" in exposure and not exposure["sector"].dropna().empty else "当前行业"
+        return {
+            "offset_level": "none",
+            "message": f"单一持仓集中在{sector}，当前无行业对冲；加入候选篮子后再计算对冲度。",
         }
     sectors = exposure["sector"].dropna().astype(str).tolist()
     pairs = hedge_pairs(sectors, corr, threshold=-0.3) if corr is not None else []
@@ -107,3 +132,27 @@ def _stock_lookup(stock_panel: pd.DataFrame) -> dict[str, dict]:
         code = str(row.get("code") or row.get("symbol", "")[-6:]).zfill(6)
         rows[code] = row
     return rows
+
+
+def resolve_holding_sector(holding: dict, fallback: str | None = None) -> str | None:
+    code = str(holding.get("code", "")).zfill(6)
+    if code in STOCK_SECTOR_OVERRIDES:
+        return STOCK_SECTOR_OVERRIDES[code]
+    return str(holding.get("sector") or fallback or "") or None
+
+
+def match_sector_name(sector: str | None, available) -> str | None:
+    if not sector:
+        return None
+    target = str(sector)
+    values = [str(item) for item in available if str(item)]
+    if target in values:
+        return target
+    if target == "证券":
+        for preferred in ("证券Ⅱ", "证券II", "证券Ⅲ", "证券III"):
+            if preferred in values:
+                return preferred
+        for value in values:
+            if value.startswith("证券"):
+                return value
+    return target

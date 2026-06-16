@@ -11,7 +11,9 @@ from src.compute import risk_engine as rk
 from src.compute.exit_signal import exit_flag
 from src.compute.portfolio_exposure import (
     build_portfolio_exposure,
+    match_sector_name,
     portfolio_offset_report,
+    resolve_holding_sector,
 )
 from src.data import account, em_client
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
@@ -53,6 +55,7 @@ def render_page() -> None:
 
     acct = account.load()
     holding = {**DEFAULT_HOLDING, **(acct.get("holdings", [{}])[0] if acct.get("holdings") else {})}
+    mapped_sector = resolve_holding_sector(holding, fallback=str(holding.get("sector") or "证券"))
 
     try:
         sector_panel = get_v2_sector_panel()
@@ -66,8 +69,9 @@ def render_page() -> None:
         if load_error:
             st.error(f"东财接口异常：{load_error}")
 
-    sectors = sector_panel["sector"].dropna().astype(str).tolist() if not sector_panel.empty else [holding.get("sector", "证券")]
-    sector_default = _index_or_zero(sectors, str(holding.get("sector") or "证券"))
+    sectors = sector_panel["sector"].dropna().astype(str).tolist() if not sector_panel.empty else [mapped_sector]
+    matched_sector = match_sector_name(mapped_sector, sectors)
+    sector_default = _index_or_zero(sectors, matched_sector or mapped_sector)
 
     with st.form("account"):
         col1, col2, col3 = st.columns(3)
@@ -105,7 +109,10 @@ def render_page() -> None:
     current_holding = {
         "code": code,
         "name": name,
-        "sector": selected_sector,
+        "sector": match_sector_name(
+            resolve_holding_sector({"code": code}, fallback=selected_sector),
+            sectors,
+        ),
         "shares": shares,
         "cost": price,
         "price": price,
@@ -190,7 +197,7 @@ def _render_exposure(holding: dict, sector_panel: pd.DataFrame) -> None:
         st.info(offset["message"])
 
     if exposure.empty:
-        st.info("当前持仓没有匹配到行业暴露。")
+        st.info("当前持仓没有匹配到行业暴露：东财未接入或行业名未匹配。")
         return
 
     st.dataframe(
@@ -220,6 +227,10 @@ def _render_exposure(holding: dict, sector_panel: pd.DataFrame) -> None:
 
 def _render_ai_summary(holding: dict, sector_panel: pd.DataFrame, ratio: float) -> None:
     row = _sector_row(sector_panel, str(holding.get("sector", "")))
+    if sector_panel.empty:
+        st.info("AI 解释缺少行业行：东财行业面板暂不可用。")
+    elif row.empty:
+        st.info(f"AI 解释缺少行业行：{holding.get('sector')} 未匹配到东财行业名。")
     facts = {
         "sector": str(holding.get("sector", "")),
         "state": str(row.get("state", "未知")),
