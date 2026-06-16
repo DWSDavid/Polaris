@@ -30,3 +30,19 @@ def test_sector_valuation_snapshot_handles_missing_data():
 
     assert snapshot.iloc[0]["valuation_label"] == "估值缺数据"
     assert snapshot.iloc[0]["valuation_coverage"] == 0.0
+
+
+def test_sector_valuation_snapshot_handles_missing_columns():
+    stocks = pd.DataFrame(
+        {
+            "sector": ["金融", "金融"],
+            "symbol": ["SH600000", "SH601688"],
+            "name": ["浦发银行", "华泰证券"],
+        }
+    )
+
+    snapshot = sector_valuation_snapshot(stocks)
+
+    assert snapshot.iloc[0]["sector"] == "金融"
+    assert snapshot.iloc[0]["valuation_label"] == "估值缺数据"
+    assert snapshot.iloc[0]["valuation_coverage"] == 0.0

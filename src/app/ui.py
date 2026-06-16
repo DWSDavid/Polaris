@@ -35,8 +35,8 @@ def apply_theme() -> None:
           letter-spacing: 0;
         }
         h1 {
-          font-size: clamp(2.1rem, 4vw, 4.2rem);
-          line-height: 1.02;
+          font-size: clamp(1.65rem, 2.4vw, 2.4rem);
+          line-height: 1.12;
           font-weight: 750;
           text-wrap: balance;
         }
@@ -81,25 +81,25 @@ def apply_theme() -> None:
         }
         .polaris-hero {
           border: 1px solid var(--polaris-line);
-          border-radius: 10px;
+          border-radius: 8px;
           background:
-            linear-gradient(135deg, rgba(134, 201, 138, .14), transparent 42%),
+            linear-gradient(135deg, rgba(134, 201, 138, .10), transparent 42%),
             linear-gradient(180deg, #1a2118, #121611);
-          padding: 26px;
-          margin: 8px 0 18px;
-          box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+          padding: 16px 18px;
+          margin: 8px 0 12px;
+          box-shadow: 0 16px 34px rgba(0, 0, 0, .20);
         }
         .polaris-eyebrow {
           color: var(--polaris-green);
-          font-size: .82rem;
+          font-size: .78rem;
           font-weight: 700;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
         .polaris-hero p {
           color: var(--polaris-muted);
-          font-size: 1.04rem;
-          line-height: 1.72;
-          max-width: 76rem;
+          font-size: .98rem;
+          line-height: 1.58;
+          max-width: 88rem;
         }
         .polaris-grid {
           display: grid;
@@ -108,10 +108,10 @@ def apply_theme() -> None:
           margin: 14px 0 20px;
         }
         .polaris-card {
-          background: var(--polaris-surface);
+          background: #151a13;
           border: 1px solid var(--polaris-line);
           border-radius: 8px;
-          padding: 14px;
+          padding: 11px 12px;
         }
         .polaris-card .label {
           color: var(--polaris-muted);
@@ -119,7 +119,7 @@ def apply_theme() -> None:
         }
         .polaris-card .value {
           color: var(--polaris-ink);
-          font-size: 1.35rem;
+          font-size: 1.12rem;
           font-weight: 720;
           font-variant-numeric: tabular-nums;
           margin-top: 5px;
@@ -130,7 +130,7 @@ def apply_theme() -> None:
           padding: 12px 14px;
           border-radius: 6px;
           color: var(--polaris-ink);
-          margin: 8px 0 16px;
+          margin: 8px 0 12px;
         }
         .polaris-status {
           padding: 10px 12px;

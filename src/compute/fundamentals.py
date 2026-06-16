@@ -18,8 +18,8 @@ def sector_valuation_snapshot(stocks: pd.DataFrame) -> pd.DataFrame:
         )
     rows = []
     for sector, group in stocks.groupby("sector", sort=True):
-        pe = pd.to_numeric(group.get("pe_ttm"), errors="coerce")
-        pb = pd.to_numeric(group.get("pb"), errors="coerce")
+        pe = _numeric_column(group, "pe_ttm")
+        pb = _numeric_column(group, "pb")
         coverage = float(pe.notna().mean()) if len(group) else 0.0
         median_pe = float(pe.median()) if pe.notna().any() else None
         median_pb = float(pb.median()) if pb.notna().any() else None
@@ -33,6 +33,12 @@ def sector_valuation_snapshot(stocks: pd.DataFrame) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows)
+
+
+def _numeric_column(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series(pd.NA, index=frame.index, dtype="Float64")
+    return pd.to_numeric(frame[column], errors="coerce")
 
 
 def _valuation_label(median_pe: float | None, coverage: float) -> str:

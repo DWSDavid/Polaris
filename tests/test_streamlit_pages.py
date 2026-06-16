@@ -60,6 +60,14 @@ def test_home_ui_helper_import_contract():
     assert callable(status_line)
 
 
+def test_streamlit_theme_uses_dark_workbench_defaults():
+    config = Path(".streamlit/config.toml")
+    assert config.exists()
+    text = config.read_text(encoding="utf-8")
+    assert 'base = "dark"' in text
+    assert 'backgroundColor = "#10130f"' in text
+
+
 def test_v2_pages_reference_linkage_stats():
     linkage = Path("src/app/pages/4_龙头联动分析.py").read_text(encoding="utf-8")
     history = Path("src/app/pages/5_历史联动验证.py").read_text(encoding="utf-8")
