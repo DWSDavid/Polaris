@@ -104,6 +104,30 @@ def test_prompt_forbids_false_missing_when_fact_is_present():
     assert "观察证券扩散是否延续" in prompt
 
 
+def test_prompt_includes_ranked_investment_directions_for_model():
+    prompt = build_advice_prompt(
+        {
+            "ranked_directions": [
+                {
+                    "sector": "电子",
+                    "score": 4.2,
+                    "reasons": ["中期趋势向上", "20日资金+24.0亿"],
+                },
+                {
+                    "sector": "银行",
+                    "score": -1.1,
+                    "reasons": ["拐点预警", "估值分位90%"],
+                },
+            ],
+            "avoid_directions": ["银行"],
+        }
+    )
+
+    assert "综合方向排序" in prompt
+    assert "电子(score=4.2" in prompt
+    assert "回避方向: 银行" in prompt
+
+
 def test_advise_parses():
     with patch("src.ai.ai_client.chat", return_value="1. 大趋势：证券仍是观察主线。"):
         out = advise(

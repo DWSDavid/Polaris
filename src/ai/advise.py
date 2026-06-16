@@ -32,12 +32,13 @@ def build_advice_prompt(facts: dict) -> str:
     return "\n".join(lines)
 
 
-def advise(facts: dict) -> str:
+def advise(facts: dict, timeout: int = 30) -> str:
     return ai_client.chat(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": build_advice_prompt(facts)},
-        ]
+        ],
+        timeout=timeout,
     )
 
 
@@ -100,6 +101,22 @@ def _readable_summary(facts: dict) -> list[str]:
         lines.append(f"估值护栏: {_compact_value(guard)}")
     if "hedge_score" in facts:
         lines.append(f"对冲度: {facts.get('hedge_score')}")
+    ranked_directions = facts.get("ranked_directions") or []
+    if ranked_directions:
+        items = []
+        for item in ranked_directions[:5]:
+            if not isinstance(item, dict):
+                continue
+            reasons = item.get("reasons") or []
+            reason_text = "、".join(str(reason) for reason in reasons[:3])
+            items.append(
+                f"{item.get('sector', '未知')}(score={item.get('score', '未知')}, {reason_text})"
+            )
+        if items:
+            lines.append("综合方向排序: " + "；".join(items))
+    avoid_directions = facts.get("avoid_directions") or []
+    if avoid_directions:
+        lines.append("回避方向: " + "、".join(str(item) for item in avoid_directions))
     linkage = facts.get("leader_linkage")
     if linkage:
         label = linkage.get("label", "未知") if isinstance(linkage, dict) else _compact_value(linkage)

@@ -14,6 +14,7 @@ def test_streamlit_pages_exist_and_compile():
         Path("src/app/pages/2_风险驾驶舱.py"),
         Path("src/app/pages/3_决策驾驶舱.py"),
         Path("src/app/pages/4_板块轮动历史.py"),
+        Path("src/app/pages/5_投资方向.py"),
     ]
     for path in paths:
         assert path.exists()
@@ -29,6 +30,7 @@ def test_streamlit_navigation_only_contains_v2_pages():
     assert "2_风险驾驶舱.py" in page_names
     assert "3_决策驾驶舱.py" in page_names
     assert "4_板块轮动历史.py" in page_names
+    assert "5_投资方向.py" in page_names
     assert "1_板块轮动排名.py" not in page_names
     assert "3_个股观察.py" not in page_names
     assert "4_龙头联动分析.py" not in page_names
@@ -154,6 +156,20 @@ def test_rotation_history_page_uses_timeline_visuals():
     assert "px.line" in page
     assert "px.imshow" in page
     assert "summarize_sector_track" in page
+    assert "st.code(" not in page
+
+
+def test_investment_direction_page_connects_synthesis_context_and_ai():
+    page = Path("src/app/pages/5_投资方向.py").read_text(encoding="utf-8")
+
+    assert "rank_directions" in page
+    assert "direction_score" in page
+    assert "advise" in page
+    assert "em_context" in page
+    assert "northbound_flow" in page
+    assert "dragon_tiger" in page
+    assert "research_reports" in page
+    assert "stock_news" in page
     assert "st.code(" not in page
 
 
