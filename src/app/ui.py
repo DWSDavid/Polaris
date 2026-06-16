@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 
 import pandas as pd
 import streamlit as st
@@ -223,7 +224,7 @@ def hero(title: str, body: str, eyebrow: str = "Polaris rotation workbench") -> 
         <section class="polaris-hero">
           <div class="polaris-eyebrow">{html.escape(eyebrow)}</div>
           <h1>{html.escape(title)}</h1>
-          <p>{html.escape(body)}</p>
+          <p>{html.escape(plain_text(body))}</p>
         </section>
         """,
         unsafe_allow_html=True,
@@ -234,6 +235,17 @@ def metric_grid(items: list[tuple[str, str]]) -> None:
     columns = st.columns(len(items))
     for column, (label, value) in zip(columns, items):
         column.metric(label, value)
+
+
+def plain_text(value: str) -> str:
+    cleaned = (
+        str(value or "")
+        .replace("*", "")
+        .replace("_", "")
+        .replace("\r", " ")
+        .replace("\n", " ")
+    )
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def state_badge(state: str) -> str:

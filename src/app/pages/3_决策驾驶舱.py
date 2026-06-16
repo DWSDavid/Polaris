@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.ai.advise import advise
-from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+from src.app.ui import apply_theme, hero, metric_grid, note, section, status_line
 from src.compute.exit_signal import exit_flag
 from src.compute.portfolio_exposure import match_sector_name
 from src.data import account, basket, em_client
@@ -95,7 +95,7 @@ def _render_verdict(result: dict) -> None:
 
 
 def _render_items(result: dict) -> None:
-    st.subheader("逐项状态")
+    section("逐项状态", "只保留3-4个候选方向，重点看趋势、拐点和对冲冲突。")
     table = pd.DataFrame(result["per_item"])
     if table.empty:
         st.info("还没有候选行业。")
@@ -108,7 +108,7 @@ def _render_items(result: dict) -> None:
 
 
 def _render_ai(panel: pd.DataFrame, result: dict, acct: dict) -> None:
-    st.subheader("AI 决策简报")
+    section("AI 决策简报", "AI 只基于候选篮子和担保比 facts 做解释。")
     mainline = panel.iloc[0] if not panel.empty else pd.Series(dtype=object)
     facts = {
         "mainline": str(mainline.get("sector", "")),

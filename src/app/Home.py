@@ -5,7 +5,16 @@ import plotly.express as px
 import streamlit as st
 
 from src.ai.summarize import summarize_sector
-from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+from src.app.ui import (
+    apply_theme,
+    hero,
+    metric_grid,
+    note,
+    plotly_template,
+    section,
+    state_badge,
+    status_line,
+)
 from src.compute.hot_focus import build_hot_dragon_focus
 from src.compute.mainline import mainline_breakdown, mainline_score, pick_mainline
 from src.data import em_client, em_context
@@ -87,6 +96,7 @@ def render_home():
     top = panel.loc[panel["sector"] == mainline].iloc[0] if mainline else panel.iloc[0]
     decision_text = _decision_summary(top)
     status_line(f"东财实时已接入 · 行业数 {len(panel)} · 10分钟缓存")
+    st.markdown(state_badge(str(top["state"])), unsafe_allow_html=True)
     hero(
         f"今日主线：{top['sector']}",
         decision_text,
@@ -108,12 +118,16 @@ def render_home():
         ["大盘云图", "主线候选表", "热度龙虎榜", "AI 总结"]
     )
     with market_tab:
+        section("大盘云图", "面积看成交额，颜色看涨跌，先确认主线是不是有扩散。")
         _render_market_treemap(panel)
     with table_tab:
+        section("主线候选表", "中期主线分、资金和趋势持续天数放在一起看。")
         _render_candidate_table(panel)
     with hot_tab:
+        section("热度龙虎榜", "东财人气前100与龙虎榜资金行为的交集，先盯不追。")
         _render_hot_dragon_focus()
     with ai_tab:
+        section("AI 总结", "AI 只读取本页真实 facts，用来解释，不做自动买卖。")
         _render_ai_tab(top)
 
 
@@ -158,6 +172,7 @@ def _render_market_treemap(panel: pd.DataFrame):
             "%{customdata[5]}"
         )
     )
+    plotly_template(fig)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",

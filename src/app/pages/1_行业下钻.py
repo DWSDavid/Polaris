@@ -7,7 +7,16 @@ import plotly.express as px
 import streamlit as st
 
 from src.ai.summarize import summarize_sector
-from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+from src.app.ui import (
+    apply_theme,
+    hero,
+    metric_grid,
+    note,
+    plotly_template,
+    section,
+    state_badge,
+    status_line,
+)
 from src.compute.exit_signal import turning_point_score
 from src.compute.fundamentals import sector_valuation_snapshot, valuation_guard
 from src.compute.glossary import TERMS, explain_term
@@ -96,6 +105,7 @@ def render_page() -> None:
     status_line(
         f"东财实时已接入 · {sector} · 10分钟刷新 · AI 只读取本页真实数值"
     )
+    st.markdown(state_badge(str(row["state"])), unsafe_allow_html=True)
     hero(
         f"{sector}：{row['state']}",
         _decision_summary(facts),
@@ -128,7 +138,7 @@ def render_page() -> None:
 
 
 def _render_trend(sector: str, hist: pd.DataFrame, row: pd.Series) -> None:
-    st.subheader("中期趋势")
+    section("中期趋势", "看近90日位置和持续天数，避免只被当天涨跌牵着走。")
     if hist.empty:
         st.info("行业历史行情暂不可用。")
         return
@@ -141,7 +151,8 @@ def _render_trend(sector: str, hist: pd.DataFrame, row: pd.Series) -> None:
         title=f"{sector} 近90日收盘趋势",
         markers=False,
     )
-    fig.update_layout(height=360, margin=dict(t=42, l=0, r=0, b=0))
+    plotly_template(fig)
+    fig.update_layout(height=360)
     st.plotly_chart(fig, width="stretch")
     st.caption(
         f"trend_days={int(row['trend_days'])}，turning_point={bool(row['turning_point'])}。"
@@ -149,7 +160,7 @@ def _render_trend(sector: str, hist: pd.DataFrame, row: pd.Series) -> None:
 
 
 def _render_flow_track(sector: str, flow_hist: pd.DataFrame) -> None:
-    st.subheader("每日主力净流入")
+    section("每日主力净流入", "连续性比单日脉冲更重要，重点看多周资金是否转正。")
     if flow_hist.empty:
         st.info("行业资金流历史暂不可用。")
         return
@@ -164,7 +175,8 @@ def _render_flow_track(sector: str, flow_hist: pd.DataFrame) -> None:
         color_continuous_scale="RdYlGn",
         title=f"{sector} 近60个交易日主力净流入(亿)",
     )
-    fig.update_layout(height=360, margin=dict(t=42, l=0, r=0, b=0))
+    plotly_template(fig)
+    fig.update_layout(height=360)
     st.plotly_chart(fig, width="stretch")
 
     latest = plot.tail(10)[
@@ -189,7 +201,7 @@ def _render_flow_track(sector: str, flow_hist: pd.DataFrame) -> None:
 
 
 def _render_leaders(leaders: pd.DataFrame) -> None:
-    st.subheader("龙头列表")
+    section("龙头列表", "只看噪声过滤后的大公司和领先公司，避免小票噪声。")
     if leaders.empty:
         st.info("噪声过滤后暂未找到满足市值和成交额门槛的成分股。")
         return
@@ -244,7 +256,7 @@ def _render_v22_advanced(
     flow_5d: pd.DataFrame,
     flow_10d: pd.DataFrame,
 ) -> None:
-    st.subheader("还能走多久")
+    section("还能走多久", "用历史类比、资金接力、龙头联动和估值护栏交叉验证。")
     analogy = _build_current_analogy(row, data["panel_hist"])
     metric_grid(
         [
@@ -256,7 +268,7 @@ def _render_v22_advanced(
     )
     st.write(analogy["summary"])
 
-    st.subheader("资金接力")
+    section("资金接力")
     rotation_history = _rotation_history_from_periods(flow_5d, flow_10d)
     if rotation_history.empty:
         st.info("资金接力需要 5日/10日行业资金快照，当前暂不可用。")
@@ -266,12 +278,12 @@ def _render_v22_advanced(
         rotation = summarize_flow_rotation(rotation_history, window=2)
         st.dataframe(_format_rotation_table(rotation.head(10)), width="stretch", height=280)
 
-    st.subheader("龙头联动验证")
+    section("龙头联动验证")
     linkage = _leader_linkage_proxy(data["hist"])
     st.write(linkage["summary"])
     st.caption("说明：当前使用行业指数历史作为代理；个股级龙头历史序列接入后，结论会更精确。")
 
-    st.subheader("估值与拐点护栏")
+    section("估值与拐点护栏")
     guard = _valuation_guard_for_sector(sector, data["cons"])
     score = _turn_score(row)
     if guard["level"] == "yellow":
@@ -289,11 +301,11 @@ def _render_v22_advanced(
 
 
 def _render_ai_and_glossary(facts: dict) -> None:
-    st.subheader("AI 总结")
+    section("AI 总结", "只喂系统算出的真实数值，方便解释但不替你下单。")
     st.dataframe(pd.DataFrame([facts]), width="stretch", height=120)
     st.write(_decision_summary(facts))
 
-    st.subheader("名词解释")
+    section("名词解释")
     for term in ["冷启动", "主升扩散", "龙头孤立", "主力分化", "拐点"]:
         with st.expander(term):
             st.write(explain_term(term))

@@ -28,3 +28,8 @@ def test_plotly_template_applies_dark_workbench_defaults():
     assert fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
     assert fig.layout.font.color == ui.INK_COLOR
     assert fig.layout.margin.t == 24
+
+
+def test_plain_text_removes_markdown_noise_for_hero_copy():
+    assert ui.plain_text("**钨板块综述（基于事实）**\n\n1. 周期判断") == "钨板块综述（基于事实） 1. 周期判断"
+    assert "*" not in ui.plain_text("*不成对粗体")

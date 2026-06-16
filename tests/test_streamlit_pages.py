@@ -69,14 +69,50 @@ def test_home_uses_market_intelligence_workbench():
     assert "--polaris-bg: #0E1117" in ui
 
 
+def test_existing_pages_apply_v23_design_language():
+    page_paths = [
+        Path("src/app/Home.py"),
+        Path("src/app/pages/1_行业下钻.py"),
+        Path("src/app/pages/2_风险驾驶舱.py"),
+        Path("src/app/pages/3_决策驾驶舱.py"),
+    ]
+
+    for path in page_paths:
+        text = path.read_text(encoding="utf-8")
+        assert "section(" in text
+        if "plotly.express" in text or "plotly.graph_objects" in text:
+            assert "plotly_template" in text
+        assert "st.code(" not in text
+
+    home = Path("src/app/Home.py").read_text(encoding="utf-8")
+    drilldown = Path("src/app/pages/1_行业下钻.py").read_text(encoding="utf-8")
+
+    assert "state_badge" in home
+    assert "state_badge" in drilldown
+
+
 def test_home_ui_helper_import_contract():
-    from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+    from src.app.ui import (
+        apply_theme,
+        card,
+        hero,
+        metric_grid,
+        note,
+        plotly_template,
+        section,
+        state_badge,
+        status_line,
+    )
 
     assert callable(apply_theme)
     assert callable(hero)
     assert callable(metric_grid)
     assert callable(note)
     assert callable(status_line)
+    assert callable(state_badge)
+    assert callable(card)
+    assert callable(section)
+    assert callable(plotly_template)
 
 
 def test_industry_drilldown_page_uses_v2_grounded_sources():

@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.ai.summarize import summarize_sector
-from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+from src.app.ui import apply_theme, hero, metric_grid, note, section, status_line
 from src.compute import risk_engine as rk
 from src.compute.exit_signal import exit_flag
 from src.compute.portfolio_exposure import (
@@ -169,7 +169,7 @@ def _render_margin_scenarios(
     debt: float,
     rate: float,
 ) -> None:
-    st.subheader("回撤情景")
+    section("回撤情景", "先看担保比在不同回撤下的压力，再决定是否动仓位。")
     scenarios = pd.DataFrame(
         rk.drawdown_scenarios(price, shares, cash, debt, [0.05, 0.10, 0.20])
     )
@@ -183,7 +183,7 @@ def _render_margin_scenarios(
 
 
 def _render_exposure(holding: dict, sector_panel: pd.DataFrame) -> None:
-    st.subheader("组合对冲暴露")
+    section("组合对冲暴露", "避免金融和科技互相抵消，让方向判断真正反映到收益。")
     diagnostics = _diagnostics_from_v2_panel(sector_panel)
     stock_panel = _stock_panel_from_holdings([holding])
     exposure = build_portfolio_exposure([holding], stock_panel, diagnostics)
