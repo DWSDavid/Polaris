@@ -1,6 +1,7 @@
 import os
+from pathlib import Path
 
-from src.compute.ai_brief import (
+from src.ai.brief import (
     build_deepseek_payload,
     build_chatgpt_payload,
     extract_chat_completion_text,
@@ -12,7 +13,8 @@ from src.compute.ai_brief import (
 
 
 def test_has_openai_key_reads_environment(monkeypatch):
-    monkeypatch.setattr("src.compute.ai_brief.load_dotenv", lambda *args, **kwargs: None)
+    assert not Path("src/compute/ai_brief.py").exists()
+    monkeypatch.setattr("src.ai.brief.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert not has_openai_key()
 
@@ -21,7 +23,7 @@ def test_has_openai_key_reads_environment(monkeypatch):
 
 
 def test_has_ai_key_reads_selected_provider_environment(monkeypatch):
-    monkeypatch.setattr("src.compute.ai_brief.load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.setattr("src.ai.brief.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     assert not has_ai_key("deepseek")
 
@@ -106,7 +108,7 @@ def test_generate_ai_brief_posts_to_deepseek_chat_completions(monkeypatch):
         return Response()
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
-    monkeypatch.setattr("src.compute.ai_brief.requests.post", fake_post)
+    monkeypatch.setattr("src.ai.brief.requests.post", fake_post)
 
     result = generate_ai_brief("通信 +2.3%，扩散80%", provider="deepseek", timeout=7)
 
