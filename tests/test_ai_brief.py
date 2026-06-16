@@ -107,7 +107,9 @@ def test_generate_ai_brief_posts_to_deepseek_chat_completions(monkeypatch):
         )
         return Response()
 
+    monkeypatch.setattr("src.ai.brief.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
     monkeypatch.setattr("src.ai.brief.requests.post", fake_post)
 
     result = generate_ai_brief("通信 +2.3%，扩散80%", provider="deepseek", timeout=7)

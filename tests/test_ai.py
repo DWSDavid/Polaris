@@ -59,7 +59,9 @@ def test_chat_posts_to_deepseek_compatible_endpoint(monkeypatch):
         calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
         return Response()
 
+    monkeypatch.setattr("src.ai.ai_client.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("src.ai.ai_client.requests.post", fake_post)
 
