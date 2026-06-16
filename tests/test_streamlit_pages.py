@@ -9,6 +9,7 @@ def test_streamlit_pages_exist_and_compile():
         Path("src/app/pages/0_使用说明.py"),
         Path("src/app/pages/1_行业下钻.py"),
         Path("src/app/pages/2_风险驾驶舱.py"),
+        Path("src/app/pages/3_决策驾驶舱.py"),
     ]
     for path in paths:
         assert path.exists()
@@ -22,6 +23,7 @@ def test_streamlit_navigation_only_contains_v2_pages():
     assert "0_使用说明.py" in page_names
     assert "1_行业下钻.py" in page_names
     assert "2_风险驾驶舱.py" in page_names
+    assert "3_决策驾驶舱.py" in page_names
     assert "1_板块轮动排名.py" not in page_names
     assert "3_个股观察.py" not in page_names
     assert "4_龙头联动分析.py" not in page_names
@@ -109,3 +111,11 @@ def test_risk_page_references_portfolio_offset():
     assert "summarize_sector" in risk_page
     assert "refresh_eod" not in risk_page
     assert "market_intelligence" not in risk_page
+
+
+def test_decision_cockpit_uses_basket_engine():
+    page = Path("src/app/pages/3_决策驾驶舱.py").read_text(encoding="utf-8")
+
+    assert "evaluate_basket" in page
+    assert "hedge_score" in page
+    assert "portfolio_offset_report" not in page
