@@ -154,6 +154,9 @@ def test_rotation_history_page_uses_timeline_visuals():
 
     assert "fetch_rotation_timeline" in page
     assert "aggregate_timeline_to_groups" in page
+    assert "select_rotation_sectors" in page
+    assert "heatmap_flow_matrix" in page
+    assert "这页回答" in page
     assert "weekly_rank" in page
     assert "leader_changes" in page
     assert "plotly_template" in page

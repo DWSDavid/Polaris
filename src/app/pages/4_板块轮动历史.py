@@ -9,7 +9,9 @@ from src.compute.rotation_history import summarize_sector_track
 from src.data.sector_groups import aggregate_timeline_to_groups
 from src.pipeline.rotation_timeline import (
     fetch_rotation_timeline,
+    heatmap_flow_matrix,
     leader_changes,
+    select_rotation_sectors,
     weekly_rank,
 )
 
@@ -25,6 +27,7 @@ def render_page() -> None:
     apply_theme()
 
     status_line("东财行业历史 · 约3个月窗口 · 小时级缓存")
+    st.info("这页回答：过去3个月主线在大类板块之间怎么轮动；带状图越靠上越强，热力图红色代表资金净流入、绿色代表净流出。")
     timeline = _safe_timeline()
     if timeline.empty:
         hero(
@@ -79,9 +82,7 @@ def _render_bump_chart(weekly: pd.DataFrame) -> None:
     if weekly.empty:
         st.info("周排名样本不足。")
         return
-    top_sectors = (
-        weekly.groupby("sector")["rank"].min().sort_values().head(14).index.tolist()
-    )
+    top_sectors = select_rotation_sectors(weekly, min_groups=6, max_groups=12)
     view = weekly[weekly["sector"].isin(top_sectors)].copy()
     fig = px.line(
         view,
@@ -103,27 +104,22 @@ def _render_flow_heatmap(weekly: pd.DataFrame) -> None:
     if weekly.empty:
         st.info("资金接力样本不足。")
         return
-    top_sectors = (
-        weekly.groupby("sector")["main_net_inflow"].sum().abs().sort_values(ascending=False).head(18).index
-    )
-    view = weekly[weekly["sector"].isin(top_sectors)].copy()
-    view["flow_yi"] = pd.to_numeric(view["main_net_inflow"], errors="coerce") / 100_000_000
-    pivot = view.pivot_table(
-        index="sector",
-        columns="week",
-        values="flow_yi",
-        aggfunc="sum",
-        fill_value=0,
-    )
+    pivot, limit = heatmap_flow_matrix(weekly, max_groups=18)
+    if pivot.empty:
+        st.info("资金接力样本不足。")
+        return
     fig = px.imshow(
         pivot,
         aspect="auto",
         color_continuous_scale="RdYlGn_r",
+        zmin=-limit if limit else None,
+        zmax=limit if limit else None,
         labels=dict(x="周", y="行业", color="净流入(亿)"),
     )
     plotly_template(fig)
-    fig.update_layout(height=560)
+    fig.update_layout(height=560, coloraxis_colorbar=dict(title="净流入(亿)"))
     st.plotly_chart(fig, width="stretch")
+    st.caption("色阶按分位数裁剪，避免单周极端资金把其他板块全部压成同一种颜色。")
 
 
 def _render_leader_changes(changes: dict) -> None:

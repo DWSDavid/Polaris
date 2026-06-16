@@ -3,7 +3,9 @@ import pytest
 
 from src.pipeline.rotation_timeline import (
     build_rotation_timeline,
+    heatmap_flow_matrix,
     leader_changes,
+    select_rotation_sectors,
     weekly_rank,
 )
 
@@ -170,6 +172,56 @@ def test_fetch_timeline_uses_local_cached_hist_when_network_fails(
     assert got.loc[0, "sector"] == "证券"
 
 
+def test_fetch_timeline_uses_network_for_uncached_sectors_when_some_cache_exists(
+    tmp_path, monkeypatch
+):
+    from src.pipeline import rotation_timeline as rt
+
+    cache_dir = tmp_path / "data" / "cache"
+    hist_dir = cache_dir / "em" / "industry_hist"
+    hist_dir.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "sector": ["证券"],
+            "trade_date": ["2026-06-16"],
+            "pct_chg": [1.0],
+            "amount": [1_200_000_000],
+        }
+    ).to_parquet(hist_dir / "证券_20260601_20260616.parquet", index=False)
+
+    monkeypatch.setattr(rt.cache, "CACHE_DIR", cache_dir)
+    monkeypatch.setattr(
+        rt.em_client,
+        "industry_realtime",
+        lambda: pd.DataFrame(
+            {
+                "sector": ["证券", "电子"],
+                "amount": [10_000_000_000, 9_000_000_000],
+                "pct_chg": [1.2, 0.9],
+            }
+        ),
+    )
+    monkeypatch.setattr(rt.em_client, "industry_fund_flow_hist", lambda sector: pd.DataFrame())
+
+    def fake_hist(sector, start, end):
+        if sector == "电子":
+            return pd.DataFrame(
+                {
+                    "sector": [sector],
+                    "trade_date": ["2026-06-16"],
+                    "pct_chg": [0.8],
+                    "amount": [1_100_000_000],
+                }
+            )
+        return pd.DataFrame()
+
+    monkeypatch.setattr(rt.em_client, "industry_hist", fake_hist)
+
+    got = rt.fetch_rotation_timeline(days=30, max_sectors=2)
+
+    assert {"证券", "电子"} <= set(got["sector"])
+
+
 def test_fetch_timeline_scans_extra_candidates_until_it_has_rows(monkeypatch):
     from src.pipeline import rotation_timeline as rt
 
@@ -221,3 +273,40 @@ def test_leader_changes_reports_weekly_handoff():
     assert changes["leaders"] == ["证券", "电子"]
     assert changes["path"] == "证券→电子"
     assert changes["segments"][0]["sector"] == "证券"
+
+
+def test_select_rotation_sectors_keeps_multiple_groups():
+    weekly = pd.DataFrame(
+        {
+            "week": ["2026-20"] * 5 + ["2026-21"] * 5,
+            "sector": ["证券", "电子", "医药", "原材料", "通信"] * 2,
+            "rank": [1, 2, 3, 4, 5, 2, 1, 3, 5, 4],
+            "strength": [8, 7, 6, 5, 4, 7, 9, 6, 3, 4],
+            "main_net_inflow": [5e8, 4e8, 3e8, -2e8, 1e8, 2e8, 6e8, 1e8, -1e8, 1e8],
+        }
+    )
+
+    selected = select_rotation_sectors(weekly, min_groups=4, max_groups=5)
+
+    assert len(selected) >= 4
+    assert "电子" in selected
+    assert "证券" in selected
+
+
+def test_heatmap_flow_matrix_clips_outliers_and_uses_yi_units():
+    weekly = pd.DataFrame(
+        {
+            "week": ["2026-20", "2026-20", "2026-21", "2026-21"],
+            "sector": ["证券", "电子", "证券", "电子"],
+            "rank": [1, 2, 2, 1],
+            "strength": [8, 7, 6, 9],
+            "main_net_inflow": [100e8, 2e8, -2e8, 3e8],
+        }
+    )
+
+    matrix, limit = heatmap_flow_matrix(weekly, max_groups=2, clip_quantile=0.5)
+
+    assert set(matrix.index) == {"证券", "电子"}
+    assert limit <= 3.0
+    assert matrix.to_numpy().max() <= 3.0
+    assert matrix.to_numpy().min() >= -3.0

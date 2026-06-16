@@ -88,6 +88,66 @@ def weekly_rank(timeline: pd.DataFrame) -> pd.DataFrame:
     return grouped.sort_values(["week", "rank"]).reset_index(drop=True)
 
 
+def select_rotation_sectors(
+    weekly: pd.DataFrame, min_groups: int = 6, max_groups: int = 12
+) -> list[str]:
+    if weekly.empty:
+        return []
+    frame = weekly.copy()
+    frame["rank"] = pd.to_numeric(frame.get("rank"), errors="coerce").fillna(99)
+    frame["strength"] = pd.to_numeric(frame.get("strength"), errors="coerce").fillna(0)
+    frame["main_net_inflow"] = pd.to_numeric(
+        frame.get("main_net_inflow"), errors="coerce"
+    ).fillna(0)
+    latest_week = frame["week"].max()
+    latest = frame[frame["week"] == latest_week].copy()
+    ranked = (
+        frame.groupby("sector", as_index=False)
+        .agg(
+            best_rank=("rank", "min"),
+            avg_rank=("rank", "mean"),
+            avg_strength=("strength", "mean"),
+            abs_flow=("main_net_inflow", lambda values: values.abs().sum()),
+        )
+        .sort_values(["best_rank", "avg_rank", "avg_strength"], ascending=[True, True, False])
+    )
+    selected = ranked.head(max_groups)["sector"].astype(str).tolist()
+    if len(selected) < min_groups and not latest.empty:
+        by_latest = latest.sort_values(["rank", "strength"], ascending=[True, False])[
+            "sector"
+        ].astype(str)
+        for sector in by_latest:
+            if sector not in selected:
+                selected.append(sector)
+            if len(selected) >= min_groups:
+                break
+    return selected[:max_groups]
+
+
+def heatmap_flow_matrix(
+    weekly: pd.DataFrame,
+    max_groups: int = 18,
+    clip_quantile: float = 0.95,
+) -> tuple[pd.DataFrame, float]:
+    if weekly.empty:
+        return pd.DataFrame(), 0.0
+    selected = select_rotation_sectors(weekly, min_groups=min(6, max_groups), max_groups=max_groups)
+    frame = weekly[weekly["sector"].astype(str).isin(selected)].copy()
+    frame["flow_yi"] = pd.to_numeric(frame["main_net_inflow"], errors="coerce").fillna(0) / 100_000_000
+    pivot = frame.pivot_table(
+        index="sector",
+        columns="week",
+        values="flow_yi",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    values = pivot.abs().stack()
+    limit = float(values.quantile(clip_quantile)) if not values.empty else 0.0
+    if limit > 0:
+        pivot = pivot.clip(lower=-limit, upper=limit)
+    return pivot, limit
+
+
 def leader_changes(weekly: pd.DataFrame) -> dict:
     if weekly.empty:
         return {"leaders": [], "path": "", "segments": [], "summary": "暂无轮动样本。"}
@@ -132,12 +192,9 @@ def fetch_rotation_timeline(days: int = 90, max_sectors: int = 60) -> pd.DataFra
         .tolist()
     )
     rows = []
-    has_hist_cache = _has_industry_hist_cache()
     for sector in sectors:
         hist = _cached_industry_hist(sector, days)
         flow = _cached_industry_flow(sector)
-        if hist.empty and has_hist_cache:
-            continue
         if hist.empty:
             try:
                 flow = em_client.industry_fund_flow_hist(sector)
