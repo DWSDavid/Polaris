@@ -6,6 +6,7 @@ import streamlit as st
 
 from src.ai.summarize import summarize_sector
 from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+from src.compute.mainline import mainline_breakdown, mainline_score, pick_mainline
 from src.data import em_client
 from src.data.universe_v2 import build_universe
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
@@ -37,12 +38,15 @@ def get_sector_panel():
         except Exception:
             histories[sector] = pd.DataFrame()
     leaders = _build_leaders_for_sectors(leader_sectors)
-    return build_sector_panel_v2(
+    panel = build_sector_panel_v2(
         industry_realtime=realtime,
         flow_5d=flow_5d,
         flow_10d=flow_10d,
         histories=histories,
         leaders=leaders,
+    )
+    return mainline_score(panel).sort_values(
+        ["mainline_score", "strength_rank"], ascending=False
     )
 
 
@@ -68,7 +72,8 @@ def render_home():
         )
         return
 
-    top = panel.iloc[0]
+    mainline = pick_mainline(panel)
+    top = panel.loc[panel["sector"] == mainline].iloc[0] if mainline else panel.iloc[0]
     decision_text = _decision_summary(top)
     status_line(f"东财实时已接入 · 行业数 {len(panel)} · 10分钟缓存")
     hero(
@@ -86,6 +91,7 @@ def render_home():
     )
     if bool(top.get("turning_point", False)):
         note("拐点提示：资金或动能出现转弱，先降低追高假设。")
+    note(f"为什么是它：{_mainline_reason(top)}")
 
     market_tab, table_tab, ai_tab = st.tabs(["大盘云图", "主线候选表", "AI 总结"])
     with market_tab:
@@ -149,7 +155,7 @@ def _render_market_treemap(panel: pd.DataFrame):
 
 
 def _render_candidate_table(panel: pd.DataFrame):
-    table = panel.head(40).copy()
+    table = panel.sort_values("mainline_score", ascending=False).head(40).copy()
     table["10日净流入(亿)"] = table["inflow_10d"].map(_yi)
     table["今日主力(亿)"] = table["main_net_inflow"].map(_yi)
     table["成交额(亿)"] = table["amount"].map(_yi)
@@ -164,6 +170,7 @@ def _render_candidate_table(panel: pd.DataFrame):
             "diffusion",
             "top_leaders",
             "turning_point",
+            "mainline_score",
             "成交额(亿)",
         ]
     ].rename(
@@ -175,6 +182,7 @@ def _render_candidate_table(panel: pd.DataFrame):
             "diffusion": "扩散",
             "top_leaders": "龙头",
             "turning_point": "拐点",
+            "mainline_score": "主线分",
         }
     )
     st.dataframe(
@@ -185,6 +193,7 @@ def _render_candidate_table(panel: pd.DataFrame):
             "10日净流入(亿)": st.column_config.NumberColumn(format="%+.1f"),
             "今日主力(亿)": st.column_config.NumberColumn(format="%+.1f"),
             "成交额(亿)": st.column_config.NumberColumn(format="%.1f"),
+            "主线分": st.column_config.NumberColumn(format="%.2f"),
             "涨跌幅%": st.column_config.NumberColumn(format="%+.2f"),
             "扩散": st.column_config.ProgressColumn(
                 min_value=0,
@@ -217,6 +226,15 @@ def _local_summary(facts: dict) -> str:
         f"10日主力净流入{facts['inflow_10d']:+.1f}亿，今日主力"
         f"{facts['main_net_inflow']:+.1f}亿，扩散{facts['diffusion']:.0%}"
         f"{turning}。先看{facts['top_leaders']}能否继续带动中军。"
+    )
+
+
+def _mainline_reason(row: pd.Series) -> str:
+    return (
+        f"10日资金 {_yi(row.get('inflow_10d', 0)):+.1f} 亿 / "
+        f"持续 {int(row.get('trend_days', 0) or 0)} 天 / "
+        f"扩散 {float(row.get('diffusion', 0) or 0):.0%} / "
+        f"{mainline_breakdown(row)}"
     )
 
 
