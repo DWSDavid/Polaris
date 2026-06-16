@@ -12,6 +12,7 @@ from src.compute.ai_brief import (
 
 
 def test_has_openai_key_reads_environment(monkeypatch):
+    monkeypatch.setattr("src.compute.ai_brief.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert not has_openai_key()
 
@@ -20,6 +21,7 @@ def test_has_openai_key_reads_environment(monkeypatch):
 
 
 def test_has_ai_key_reads_selected_provider_environment(monkeypatch):
+    monkeypatch.setattr("src.compute.ai_brief.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     assert not has_ai_key("deepseek")
 

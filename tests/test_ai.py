@@ -38,6 +38,7 @@ def test_summarize_parses_response():
 
 
 def test_chat_returns_placeholder_without_key(monkeypatch):
+    monkeypatch.setattr("src.ai.ai_client.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
