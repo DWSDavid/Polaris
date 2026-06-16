@@ -7,6 +7,7 @@ import streamlit as st
 from src.ai.summarize import summarize_sector
 from src.app.ui import apply_theme, hero, metric_grid, note, status_line
 from src.data import em_client
+from src.data.universe_v2 import build_universe
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
 
@@ -23,17 +24,25 @@ def get_sector_panel():
         .dropna()
         .tolist()
     )
+    leader_sectors = (
+        realtime.sort_values(["pct_chg", "main_net_inflow"], ascending=False)
+        .head(20)["sector"]
+        .dropna()
+        .tolist()
+    )
     histories = {}
     for sector in history_sectors:
         try:
             histories[sector] = em_client.industry_hist(sector, start, end)
         except Exception:
             histories[sector] = pd.DataFrame()
+    leaders = _build_leaders_for_sectors(leader_sectors)
     return build_sector_panel_v2(
         industry_realtime=realtime,
         flow_5d=flow_5d,
         flow_10d=flow_10d,
         histories=histories,
+        leaders=leaders,
     )
 
 
@@ -224,6 +233,20 @@ def _facts(row: pd.Series) -> dict:
         "turning_point": bool(row.get("turning_point", False)),
         "top_leaders": str(row.get("top_leaders", "")),
     }
+
+
+def _build_leaders_for_sectors(sectors: list[str]) -> pd.DataFrame:
+    frames = []
+    for sector in sectors:
+        try:
+            leaders = build_universe(sectors=[sector], top_n=3)
+        except Exception:
+            continue
+        if not leaders.empty:
+            frames.append(leaders)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
 
 
 def _yi(value) -> float:

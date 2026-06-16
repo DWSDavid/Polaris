@@ -1,6 +1,11 @@
 import pandas as pd
 
-from src.data.universe_v2 import add_momentum_leaders, filter_noise, pick_leaders
+from src.data.universe_v2 import (
+    add_momentum_leaders,
+    build_universe,
+    filter_noise,
+    pick_leaders,
+)
 
 
 def test_filter_noise():
@@ -73,3 +78,33 @@ def test_add_momentum_leaders_appends_manual_list_without_duplicates():
     assert len(out) == 2
     row = out[out["code"] == "300274"].iloc[0]
     assert row["leader_type"] == "momentum"
+
+
+def test_build_universe_uses_industry_cons_metrics_without_full_market_snapshot(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "src.data.universe_v2.em_client.industry_realtime",
+        lambda: pd.DataFrame({"sector": ["银行"]}),
+    )
+    monkeypatch.setattr(
+        "src.data.universe_v2.em_client.industry_cons",
+        lambda sector: pd.DataFrame(
+            {
+                "sector": [sector, sector],
+                "code": ["601939", "601398"],
+                "name": ["建设银行", "工商银行"],
+                "total_mv": [2e12, 1.8e12],
+                "amount": [2e9, 1.5e9],
+                "turnover": [0.8, 0.7],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "src.data.universe_v2.em_client.market_spot",
+        lambda: (_ for _ in ()).throw(AssertionError("market_spot should not be called")),
+    )
+
+    out = build_universe(sectors=["银行"], top_n=2)
+
+    assert out["name"].tolist() == ["建设银行", "工商银行"]

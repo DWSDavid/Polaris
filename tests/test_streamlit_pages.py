@@ -44,6 +44,8 @@ def test_home_uses_market_intelligence_workbench():
     ui = Path("src/app/ui.py").read_text(encoding="utf-8")
 
     assert "build_sector_panel_v2" in home
+    assert "build_universe" in home
+    assert "leaders=leaders" in home
     assert "summarize_sector" in home
     assert "em_client.industry_realtime" in home
     assert "main_net_inflow" in home
@@ -74,6 +76,8 @@ def test_industry_drilldown_page_uses_v2_grounded_sources():
 
     assert "industry_fund_flow_hist" in page
     assert "industry_cons" in page
+    assert "build_universe" in page
+    assert "leaders=leaders" in page
     assert "summarize_sector" in page
     assert "explain_term" in page
     assert "trend_days" in page

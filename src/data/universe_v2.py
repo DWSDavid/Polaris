@@ -87,10 +87,14 @@ def build_universe(
 ) -> pd.DataFrame:
     sector_panel = em_client.industry_realtime()
     selected = sectors or sector_panel["sector"].dropna().tolist()
-    market = em_client.market_spot()
+    market = None
     frames = []
     for sector in selected:
-        candidates = _merge_market_metrics(em_client.industry_cons(sector), market)
+        candidates = em_client.industry_cons(sector)
+        if _needs_market_metrics(candidates):
+            if market is None:
+                market = em_client.market_spot()
+            candidates = _merge_market_metrics(candidates, market)
         filtered = filter_noise(
             candidates,
             min_mv=min_mv,
@@ -105,6 +109,17 @@ def build_universe(
     else:
         universe = pd.DataFrame()
     return add_momentum_leaders(universe, manual_list)
+
+
+def _needs_market_metrics(cons: pd.DataFrame) -> bool:
+    required = ["total_mv", "amount", "turnover"]
+    for column in required:
+        if column not in cons.columns:
+            return True
+        values = pd.to_numeric(cons[column], errors="coerce")
+        if values.notna().sum() == 0:
+            return True
+    return False
 
 
 def _merge_market_metrics(cons: pd.DataFrame, market: pd.DataFrame) -> pd.DataFrame:

@@ -10,7 +10,7 @@ from src.ai.summarize import summarize_sector
 from src.app.ui import apply_theme, hero, metric_grid, note, status_line
 from src.compute.glossary import TERMS, explain_term
 from src.data import em_client
-from src.data.universe_v2 import filter_noise, pick_leaders
+from src.data.universe_v2 import build_universe, filter_noise, pick_leaders
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
 
@@ -30,7 +30,7 @@ def get_sector_drilldown(sector: str) -> dict[str, pd.DataFrame]:
     hist = _safe_frame(em_client.industry_hist, sector, start, end)
     flow_hist = _safe_frame(em_client.industry_fund_flow_hist, sector)
     cons = _safe_frame(em_client.industry_cons, sector)
-    leaders = _leader_table(cons)
+    leaders = _build_leaders(sector, cons)
     panel_hist = _merge_history_with_flow(hist, flow_hist)
     return {
         "hist": hist,
@@ -67,12 +67,13 @@ def render_page() -> None:
 
     try:
         data = get_sector_drilldown(sector)
+        leaders = data["leaders"]
         selected_panel = build_sector_panel_v2(
             industry_realtime=realtime[realtime["sector"] == sector],
             flow_5d=flow_5d[flow_5d["sector"] == sector],
             flow_10d=flow_10d[flow_10d["sector"] == sector],
             histories={sector: data["panel_hist"]},
-            leaders=data["leaders"],
+            leaders=leaders,
         )
     except Exception as exc:
         status_line("行业下钻加载失败")
@@ -254,6 +255,16 @@ def _leader_table(cons: pd.DataFrame) -> pd.DataFrame:
     if filtered.empty:
         filtered = cons.copy()
     return pick_leaders(filtered, top_n=12)
+
+
+def _build_leaders(sector: str, cons: pd.DataFrame) -> pd.DataFrame:
+    try:
+        leaders = build_universe(sectors=[sector], top_n=12)
+    except Exception:
+        leaders = pd.DataFrame()
+    if not leaders.empty:
+        return leaders
+    return _leader_table(cons)
 
 
 def _safe_frame(fn, *args) -> pd.DataFrame:
