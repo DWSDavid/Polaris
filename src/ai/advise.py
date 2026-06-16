@@ -10,9 +10,9 @@ SYSTEM_PROMPT = (
 )
 
 SECTION_PROMPT = (
-    "请用中文分点输出 5 点以内："
-    "1. 大趋势；2. 资金与分化；3. 龙头联动；"
-    "4. 持仓、对冲与担保比；5. 今日观察。"
+    "请用中文输出 80-220 字，必须按 5 个决策分点："
+    "1. 周期判断（大趋势）；2. 资金与分化；3. 龙头联动；"
+    "4. 对冲与担保比（结合持仓）；5. 今日观察。"
     "每一点必须引用下面 facts 中已有字段，不要补充未给出的数字。"
 )
 
@@ -64,6 +64,22 @@ def _readable_summary(facts: dict) -> list[str]:
             f"持续{facts.get('mainline_trend_days', '未知')}天, "
             f"10日资金{facts.get('mainline_inflow_10d', '未知')}"
         )
+    if "trend_days" in facts or "mainline_trend_days" in facts:
+        lines.append(f"趋势持续: {facts.get('trend_days', facts.get('mainline_trend_days'))} 天")
+    analogy = facts.get("historical_analogy")
+    if analogy:
+        lines.append(f"历史类比: {_compact_value(analogy)}")
+    rotation = facts.get("rotation_flow")
+    if rotation:
+        lines.append(f"资金接力: {_compact_value(rotation)}")
+    guard = facts.get("valuation_guard")
+    if guard:
+        lines.append(f"估值护栏: {_compact_value(guard)}")
+    if "hedge_score" in facts:
+        lines.append(f"对冲度: {facts.get('hedge_score')}")
+    linkage = facts.get("leader_linkage")
+    if linkage:
+        lines.append(f"龙头联动: {_compact_value(linkage)}")
     holdings = facts.get("holdings") or []
     if holdings:
         holding_text = "、".join(
@@ -90,3 +106,11 @@ def _readable_summary(facts: dict) -> list[str]:
     if "today_watch" in facts:
         lines.append(f"今日观察: {facts.get('today_watch')}")
     return lines or ["无摘要字段，仅使用下方 facts。"]
+
+
+def _compact_value(value) -> str:
+    if isinstance(value, dict):
+        return "，".join(f"{key}={item}" for key, item in value.items())
+    if isinstance(value, list):
+        return "，".join(str(item) for item in value)
+    return str(value)

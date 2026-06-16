@@ -44,6 +44,30 @@ def test_prompt_adds_readable_fact_summary_for_model():
     assert "今日观察: 观察证券是否继续扩散，电子是否造成组合对冲。" in prompt
 
 
+def test_prompt_adds_thicker_decision_facts_for_model():
+    facts = {
+        "mainline": "证券",
+        "mainline_trend_days": 8,
+        "mainline_inflow_10d": 30.0,
+        "historical_analogy": {"sample_count": 12, "median_remaining_positive_days": 5},
+        "rotation_flow": {"rotation_label": "资金接力流入", "net_inflow": 2.4},
+        "valuation_guard": {"level": "watch", "message": "估值偏高"},
+        "hedge_score": 0.62,
+        "hedge_pairs": [["证券", "电子"]],
+        "guarantee_ratio": 1.69,
+        "trend_days": 8,
+        "leader_linkage": {"label": "龙头确认"},
+    }
+
+    prompt = build_advice_prompt(facts)
+
+    for keyword in ["周期判断", "资金与分化", "龙头联动", "对冲与担保比", "今日观察"]:
+        assert keyword in prompt
+    for keyword in ["历史类比", "资金接力", "估值护栏", "对冲度", "趋势持续", "龙头确认"]:
+        assert keyword in prompt
+    assert "80-220" in prompt
+
+
 def test_advise_parses():
     with patch("src.ai.ai_client.chat", return_value="1. 大趋势：证券仍是观察主线。"):
         out = advise(

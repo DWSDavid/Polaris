@@ -9,6 +9,13 @@ FACT_KEYS = [
     "sector",
     "state",
     "trend_days",
+    "historical_analogy",
+    "rotation_flow",
+    "valuation_guard",
+    "hedge_score",
+    "hedge_pairs",
+    "guarantee_ratio",
+    "leader_linkage",
     "pct_chg",
     "main_net_inflow",
     "inflow_5d",
@@ -29,12 +36,15 @@ def build_sector_prompt(facts: dict) -> str:
     for key in FACT_KEYS:
         if key in facts and facts[key] is not None:
             lines.append(f"- {key}: {facts[key]}")
+    for key, value in facts.items():
+        if key not in FACT_KEYS and value is not None:
+            lines.append(f"- {key}: {value}")
     state = facts.get("state")
     if state:
         lines.append(f"- state_definition: {explain_term(str(state))}")
     lines.append(
-        "输出要求：分 3-5 点，80-200 字，说明主线、持续天数、资金、扩散和龙头；"
-        "只给观察倾向，不给买卖指令。"
+        "输出要求：80-220字，按 5 个决策分点写：周期判断、资金与分化、龙头联动、对冲与担保比、今日观察。"
+        "每一点只引用上方 facts 中已有字段；不编造价格、资金、个股名、新闻或财务数据；只给观察倾向，不给买卖指令。"
     )
     return "\n".join(lines)
 

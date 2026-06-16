@@ -21,6 +21,27 @@ def test_prompt_only_contains_given_numbers():
     assert "阳光电源、宁德时代" in prompt
 
 
+def test_sector_prompt_includes_thicker_decision_facts():
+    facts = {
+        "sector": "证券",
+        "state": "主升扩散",
+        "trend_days": 8,
+        "historical_analogy": {"sample_count": 12, "median_remaining_positive_days": 5},
+        "rotation_flow": {"rotation_label": "资金接力流入", "net_inflow": 2.4},
+        "valuation_guard": {"level": "watch", "message": "估值偏高"},
+        "hedge_score": 0.62,
+        "leader_linkage": {"label": "龙头确认"},
+    }
+
+    prompt = build_sector_prompt(facts)
+
+    for keyword in ["周期判断", "资金与分化", "龙头联动", "对冲与担保比", "今日观察"]:
+        assert keyword in prompt
+    for keyword in ["historical_analogy", "rotation_flow", "valuation_guard", "hedge_score", "leader_linkage"]:
+        assert keyword in prompt
+    assert "80-220" in prompt
+
+
 def test_summarize_parses_response():
     with patch("src.ai.ai_client.chat", return_value="电力设备主升扩散，已持续9天。"):
         out = summarize_sector(
