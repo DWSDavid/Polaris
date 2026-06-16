@@ -60,6 +60,9 @@ def test_home_uses_market_intelligence_workbench():
     assert "AI 总结" in home
     assert "_render_market_treemap" in home
     assert "_render_candidate_table" in home
+    assert "build_hot_dragon_focus" in home
+    assert "em_context.hot_rank" in home
+    assert "_render_hot_dragon_focus" in home
     assert "ttl=600" in home
     assert "st.code(" not in home
     assert "polaris-hero" in ui

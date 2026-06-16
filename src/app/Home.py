@@ -6,8 +6,9 @@ import streamlit as st
 
 from src.ai.summarize import summarize_sector
 from src.app.ui import apply_theme, hero, metric_grid, note, status_line
+from src.compute.hot_focus import build_hot_dragon_focus
 from src.compute.mainline import mainline_breakdown, mainline_score, pick_mainline
-from src.data import em_client
+from src.data import em_client, em_context
 from src.data.universe_v2 import build_universe
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -48,6 +49,16 @@ def get_sector_panel():
     return mainline_score(panel).sort_values(
         ["mainline_score", "strength_rank"], ascending=False
     )
+
+
+@st.cache_data(ttl=600)
+def get_hot_dragon_focus():
+    hot = em_context.hot_rank(limit=100)
+    try:
+        dragon = em_context.dragon_tiger()
+    except Exception:
+        dragon = pd.DataFrame()
+    return build_hot_dragon_focus(hot, dragon, top_n=100)
 
 
 def render_home():
@@ -93,11 +104,15 @@ def render_home():
         note("拐点提示：资金或动能出现转弱，先降低追高假设。")
     note(f"为什么是它：{_mainline_reason(top)}")
 
-    market_tab, table_tab, ai_tab = st.tabs(["大盘云图", "主线候选表", "AI 总结"])
+    market_tab, table_tab, hot_tab, ai_tab = st.tabs(
+        ["大盘云图", "主线候选表", "热度龙虎榜", "AI 总结"]
+    )
     with market_tab:
         _render_market_treemap(panel)
     with table_tab:
         _render_candidate_table(panel)
+    with hot_tab:
+        _render_hot_dragon_focus()
     with ai_tab:
         _render_ai_tab(top)
 
@@ -201,6 +216,63 @@ def _render_candidate_table(panel: pd.DataFrame):
                 format="%.0f%%",
             ),
         },
+    )
+
+
+def _render_hot_dragon_focus():
+    try:
+        focus = get_hot_dragon_focus()
+    except Exception as exc:
+        st.warning(f"东财热度/龙虎榜暂不可用：{exc}")
+        return
+    if focus.empty:
+        st.info("东财热度榜或龙虎榜暂未返回可用观察池。")
+        return
+
+    table = focus.head(40).copy()
+    table["龙虎榜净买(亿)"] = table["dragon_tiger_net_buy"].map(_yi)
+    table = table[
+        [
+            "hot_rank",
+            "focus_score",
+            "code",
+            "name",
+            "latest_price",
+            "pct_chg",
+            "dragon_tiger_on_list",
+            "dragon_tiger_count",
+            "龙虎榜净买(亿)",
+            "dragon_tiger_reasons",
+            "focus_reason",
+        ]
+    ].rename(
+        columns={
+            "hot_rank": "热度排名",
+            "focus_score": "观察分",
+            "code": "代码",
+            "name": "名称",
+            "latest_price": "最新价",
+            "pct_chg": "涨跌幅%",
+            "dragon_tiger_on_list": "龙虎榜",
+            "dragon_tiger_count": "上榜次数",
+            "dragon_tiger_reasons": "上榜原因",
+            "focus_reason": "为什么盯",
+        }
+    )
+    st.dataframe(
+        table,
+        width="stretch",
+        height=520,
+        column_config={
+            "观察分": st.column_config.NumberColumn(format="%.2f"),
+            "最新价": st.column_config.NumberColumn(format="%.2f"),
+            "涨跌幅%": st.column_config.NumberColumn(format="%+.2f"),
+            "龙虎榜净买(亿)": st.column_config.NumberColumn(format="%+.2f"),
+            "龙虎榜": st.column_config.CheckboxColumn(),
+        },
+    )
+    st.caption(
+        "热度榜=东财人气前100；龙虎榜=当日上榜资金行为。这里只做重点观察池，不是买入建议。"
     )
 
 

@@ -42,6 +42,108 @@ def test_northbound_flow_normalizes_and_caches(tmp_path, monkeypatch):
     pd.testing.assert_frame_equal(first, second)
 
 
+def test_hot_rank_normalizes_top100_and_caches(tmp_path, monkeypatch):
+    from src.data import cache
+
+    cache.CACHE_DIR = tmp_path
+    calls = {"count": 0}
+    raw = pd.DataFrame(
+        {
+            "当前排名": [1, 2],
+            "代码": ["SZ000636", "SH600487"],
+            "股票名称": ["风华高科", "亨通光电"],
+            "最新价": [70.61, 107.5],
+            "涨跌额": [6.05, 8.9],
+            "涨跌幅": [8.58, 8.28],
+        }
+    )
+
+    def fake_raw():
+        calls["count"] += 1
+        return raw
+
+    monkeypatch.setattr(ctx, "_raw_hot_rank", fake_raw)
+
+    first = ctx.hot_rank(limit=100)
+    second = ctx.hot_rank(limit=100)
+
+    assert calls["count"] == 1
+    assert {"hot_rank", "market_code", "code", "name", "latest_price", "pct_chg"} <= set(first.columns)
+    assert first.loc[0, "market"] == "SZ"
+    assert first.loc[0, "code"] == "000636"
+    assert first.loc[1, "market"] == "SH"
+    pd.testing.assert_frame_equal(first, second)
+
+
+def test_raw_hot_rank_retries_transient_error(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_hot_rank():
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise ValueError("eastmoney returned non-json")
+        return pd.DataFrame(
+            {
+                "当前排名": [1],
+                "代码": ["SZ000636"],
+                "股票名称": ["风华高科"],
+                "最新价": [70.61],
+                "涨跌额": [6.05],
+                "涨跌幅": [8.58],
+            }
+        )
+
+    monkeypatch.setattr(ctx.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(ctx.ak, "stock_hot_rank_em", fake_hot_rank)
+
+    got = ctx._raw_hot_rank()
+
+    assert calls["count"] == 2
+    assert got.loc[0, "股票名称"] == "风华高科"
+
+
+def test_raw_hot_rank_falls_back_to_eastmoney_delay_json(monkeypatch):
+    def blocked_hot_rank():
+        raise ValueError("eastmoney returned non-json")
+
+    class RankResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": [
+                    {"sc": "SZ000636", "rk": 1},
+                    {"sc": "SH600487", "rk": 2},
+                ]
+            }
+
+    class QuoteResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": {
+                    "diff": [
+                        {"f12": "000636", "f14": "风华高科", "f2": 70.61, "f3": 8.58},
+                        {"f12": "600487", "f14": "亨通光电", "f2": 107.5, "f3": 8.28},
+                    ]
+                }
+            }
+
+    monkeypatch.setattr(ctx.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(ctx.ak, "stock_hot_rank_em", blocked_hot_rank)
+    monkeypatch.setattr(ctx.requests, "post", lambda *args, **kwargs: RankResponse())
+    monkeypatch.setattr(ctx.requests, "get", lambda *args, **kwargs: QuoteResponse())
+
+    got = ctx._raw_hot_rank()
+
+    assert got.loc[0, "代码"] == "SZ000636"
+    assert got.loc[0, "股票名称"] == "风华高科"
+    assert got.loc[1, "代码"] == "SH600487"
+
+
 def test_dragon_tiger_normalizes_real_columns(tmp_path, monkeypatch):
     from src.data import cache
 
