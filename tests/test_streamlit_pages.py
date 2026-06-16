@@ -1,5 +1,8 @@
 import py_compile
+import importlib.util
 from pathlib import Path
+
+import pandas as pd
 
 
 def test_streamlit_pages_exist_and_compile():
@@ -88,6 +91,36 @@ def test_industry_drilldown_page_uses_v2_grounded_sources():
     assert "st.code(" not in page
 
 
+def test_industry_drilldown_page_exposes_v22_advanced_signals():
+    page = Path("src/app/pages/1_行业下钻.py").read_text(encoding="utf-8")
+
+    assert "build_analogy_samples" in page
+    assert "analogy_report" in page
+    assert "summarize_flow_rotation" in page
+    assert "build_rotation_chain" in page
+    assert "leader_linkage_report" in page
+    assert "turning_point_score" in page
+    assert "valuation_guard" in page
+
+
+def test_industry_drilldown_rotation_table_formats_each_flow_column_once():
+    page = _load_page_module("1_行业下钻.py")
+    table = pd.DataFrame(
+        {
+            "sector": ["电子"],
+            "flow_2d": [3e8],
+            "latest_flow": [2e8],
+            "flow_delta": [1e8],
+        }
+    )
+
+    formatted = page._format_rotation_table(table)
+
+    assert formatted.loc[0, "flow_2d"] == "+3.00 亿"
+    assert formatted.loc[0, "latest_flow"] == "+2.00 亿"
+    assert formatted.loc[0, "flow_delta"] == "+1.00 亿"
+
+
 def test_streamlit_theme_uses_dark_workbench_defaults():
     config = Path(".streamlit/config.toml")
     assert config.exists()
@@ -121,3 +154,11 @@ def test_decision_cockpit_uses_basket_engine():
     assert "hedge_score" in page
     assert "exit_flag" in page
     assert "portfolio_offset_report" not in page
+
+
+def _load_page_module(filename: str):
+    path = Path("src/app/pages") / filename
+    spec = importlib.util.spec_from_file_location("streamlit_page_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
