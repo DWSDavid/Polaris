@@ -242,6 +242,8 @@ def plain_text(value: str) -> str:
         str(value or "")
         .replace("*", "")
         .replace("_", "")
+        .replace("#", "")
+        .replace("`", "")
         .replace("\r", " ")
         .replace("\n", " ")
     )
