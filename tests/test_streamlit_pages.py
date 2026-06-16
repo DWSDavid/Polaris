@@ -36,24 +36,18 @@ def test_home_uses_market_intelligence_workbench():
     home = Path("src/app/Home.py").read_text(encoding="utf-8")
     ui = Path("src/app/ui.py").read_text(encoding="utf-8")
 
-    assert "sector_diagnostics" in home
-    assert "hedge_alerts" in home
-    assert "build_ai_context" in home
-    assert "generate_ai_brief" in home
-    assert "has_ai_key" in home
-    assert "DeepSeek" in home
+    assert "build_sector_panel_v2" in home
+    assert "summarize_sector" in home
+    assert "em_client.industry_realtime" in home
+    assert "main_net_inflow" in home
+    assert "inflow_10d" in home
+    assert "主线候选表" in home
+    assert "行情未接入" in home
     assert "AI 总结" in home
-    assert "sector_history_panel" in home
-    assert "stock_history_panel" in home
-    assert "summarize_sector_track" in home
-    assert "_render_stock_history_chart" in home
-    assert "valuation_label" in home
-    assert "safe_realtime_industry_panel" in home
-    assert "timeout_seconds=8" in home
     assert "_render_market_treemap" in home
+    assert "_render_candidate_table" in home
     assert "ttl=600" in home
-    assert "st.code(ai_context" not in home
-    assert "st.expander" in home
+    assert "st.code(" not in home
     assert "polaris-hero" in ui
     assert "--polaris-bg: #10130f" in ui
 

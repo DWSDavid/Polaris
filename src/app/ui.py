@@ -176,13 +176,9 @@ def hero(title: str, body: str, eyebrow: str = "Polaris rotation workbench") -> 
 
 
 def metric_grid(items: list[tuple[str, str]]) -> None:
-    cards = "\n".join(f"""
-        <div class="polaris-card">
-          <div class="label">{html.escape(label)}</div>
-          <div class="value">{html.escape(value)}</div>
-        </div>
-        """ for label, value in items)
-    st.markdown(f'<div class="polaris-grid">{cards}</div>', unsafe_allow_html=True)
+    columns = st.columns(len(items))
+    for column, (label, value) in zip(columns, items):
+        column.metric(label, value)
 
 
 def note(text: str) -> None:
