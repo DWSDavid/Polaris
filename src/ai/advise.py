@@ -21,6 +21,8 @@ def build_advice_prompt(facts: dict) -> str:
     lines = [
         SECTION_PROMPT,
         "安全约束：不要编造任何未给出的行情/资金/个股/新闻，不给买卖指令。",
+        "事实摘要:",
+        *_readable_summary(facts),
         "facts:",
     ]
     lines.extend(_flatten_facts(facts))
@@ -51,3 +53,40 @@ def _flatten_facts(value, prefix: str = "") -> list[str]:
     else:
         lines.append(f"- {prefix}: {value}")
     return lines
+
+
+def _readable_summary(facts: dict) -> list[str]:
+    lines = []
+    if "mainline" in facts:
+        lines.append(
+            "当前主线: "
+            f"{facts.get('mainline')}, "
+            f"持续{facts.get('mainline_trend_days', '未知')}天, "
+            f"10日资金{facts.get('mainline_inflow_10d', '未知')}"
+        )
+    holdings = facts.get("holdings") or []
+    if holdings:
+        holding_text = "、".join(
+            f"{item.get('name', '未知')}({item.get('sector', '未知')}, {item.get('state', '未知')})"
+            for item in holdings
+            if isinstance(item, dict)
+        )
+        if holding_text:
+            lines.append(f"当前持仓: {holding_text}")
+    candidates = facts.get("candidates") or []
+    if candidates:
+        lines.append("候选篮子: " + "、".join(str(item) for item in candidates))
+    hedge_pairs = facts.get("hedge_pairs") or []
+    if hedge_pairs:
+        pair_text = "、".join(
+            "↔".join(str(part) for part in pair)
+            for pair in hedge_pairs
+            if isinstance(pair, (list, tuple)) and len(pair) >= 2
+        )
+        if pair_text:
+            lines.append(f"对冲对: {pair_text}")
+    if "guarantee_ratio" in facts:
+        lines.append(f"担保比: {facts.get('guarantee_ratio')}")
+    if "today_watch" in facts:
+        lines.append(f"今日观察: {facts.get('today_watch')}")
+    return lines or ["无摘要字段，仅使用下方 facts。"]
