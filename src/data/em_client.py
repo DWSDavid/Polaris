@@ -14,7 +14,7 @@ TTL_SECONDS = 600
 CACHE_SOURCE = "em"
 CACHE_TS_COL = "__cached_at"
 
-CLIST_URL = "https://push2delay.eastmoney.com/api/qt/clist/get"
+CLIST_URL = "http://push2delay.eastmoney.com/api/qt/clist/get"
 KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
 HEADERS = {
     "User-Agent": (
@@ -270,9 +270,15 @@ def _eastmoney_clist(
 
 
 def _request_json(url: str, params: dict) -> dict:
-    response = requests.get(url, params=params, headers=HEADERS, timeout=20)
-    response.raise_for_status()
-    return response.json()
+    last_error = None
+    for _ in range(3):
+        try:
+            response = requests.get(url, params=params, headers=HEADERS, timeout=20)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as exc:
+            last_error = exc
+    raise last_error
 
 
 def _normalize_industry_realtime(raw: pd.DataFrame) -> pd.DataFrame:

@@ -135,3 +135,53 @@ def test_industry_hist_normalizes_ohlc(tmp_path, monkeypatch):
     assert got.loc[0, "trade_date"] == "2026-06-15"
     assert got.loc[0, "close"] == 103.0
     assert got.loc[0, "amount"] == 9e9
+
+
+def test_eastmoney_clist_uses_http_delay_host(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": {"total": 1, "diff": [{"f12": "BK0475"}]}}
+
+    def fake_get(url, params, headers, timeout):
+        calls.append(url)
+        return Response()
+
+    monkeypatch.setattr(em.requests, "get", fake_get)
+
+    em._eastmoney_clist(
+        fields="f12",
+        fs="m:90 t:2 f:!50",
+        fid="f3",
+        rename_map={"f12": "板块代码"},
+    )
+
+    assert calls[0] == "http://push2delay.eastmoney.com/api/qt/clist/get"
+
+
+def test_request_json_retries_transient_timeout(monkeypatch):
+    calls = {"count": 0}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": {"total": 0, "diff": []}}
+
+    def fake_get(url, params, headers, timeout):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise em.requests.Timeout("slow eastmoney page")
+        return Response()
+
+    monkeypatch.setattr(em.requests, "get", fake_get)
+
+    assert em._request_json("http://example.test", {}) == {
+        "data": {"total": 0, "diff": []}
+    }
+    assert calls["count"] == 2
