@@ -8,6 +8,8 @@ import pandas as pd
 
 from src.data import cache, em_client
 
+VAGUE_ROTATION_GROUPS = ("综合", "其他")
+
 
 def build_rotation_timeline(hist: pd.DataFrame) -> pd.DataFrame:
     if hist.empty:
@@ -71,9 +73,22 @@ def weekly_rank(timeline: pd.DataFrame) -> pd.DataFrame:
     frame = timeline.copy()
     frame["date_dt"] = pd.to_datetime(frame["date"], errors="coerce")
     frame = frame.dropna(subset=["date_dt", "sector"]).copy()
-    frame["week"] = frame["date_dt"].dt.strftime("%G-%V")
+    frame["week_start"] = frame["date_dt"] - pd.to_timedelta(
+        frame["date_dt"].dt.weekday, unit="D"
+    )
+    frame["week_end"] = frame["week_start"] + pd.Timedelta(days=6)
+    frame["week"] = frame["week_start"].dt.strftime("%G-W%V")
+    week_number = frame["week_start"].dt.strftime("%V").astype(int).astype(str)
+    frame["week_label"] = (
+        frame["week_start"].dt.strftime("%m/%d")
+        + "-"
+        + frame["week_end"].dt.strftime("%m/%d")
+        + " · 第"
+        + week_number
+        + "周"
+    )
     grouped = (
-        frame.groupby(["week", "sector"], as_index=False)
+        frame.groupby(["week", "week_label", "week_start", "week_end", "sector"], as_index=False)
         .agg(
             strength=("strength", "mean"),
             main_net_inflow=("main_net_inflow", "sum"),
@@ -83,12 +98,21 @@ def weekly_rank(timeline: pd.DataFrame) -> pd.DataFrame:
     grouped["rank"] = grouped.groupby("week")["strength"].rank(
         method="first", ascending=False
     ).astype(int)
-    return grouped.sort_values(["week", "rank"]).reset_index(drop=True)
+    return grouped.sort_values(["week_start", "rank"]).reset_index(drop=True)
+
+
+def filter_rotation_groups(
+    weekly: pd.DataFrame, excluded: tuple[str, ...] = VAGUE_ROTATION_GROUPS
+) -> pd.DataFrame:
+    if weekly.empty or "sector" not in weekly.columns:
+        return weekly.copy()
+    return weekly.loc[~weekly["sector"].astype(str).isin(excluded)].copy()
 
 
 def select_rotation_sectors(
     weekly: pd.DataFrame, min_groups: int = 6, max_groups: int = 12
 ) -> list[str]:
+    weekly = filter_rotation_groups(weekly)
     if weekly.empty:
         return []
     frame = weekly.copy()
@@ -129,16 +153,24 @@ def heatmap_flow_matrix(
 ) -> tuple[pd.DataFrame, float]:
     if weekly.empty:
         return pd.DataFrame(), 0.0
+    weekly = filter_rotation_groups(weekly)
+    if weekly.empty:
+        return pd.DataFrame(), 0.0
     selected = select_rotation_sectors(weekly, min_groups=min(6, max_groups), max_groups=max_groups)
     frame = weekly[weekly["sector"].astype(str).isin(selected)].copy()
     frame["flow_yi"] = pd.to_numeric(frame["main_net_inflow"], errors="coerce").fillna(0) / 100_000_000
+    x_column = "week_label" if "week_label" in frame.columns else "week"
+    if "week_start" in frame.columns:
+        frame = frame.sort_values(["week_start", "sector"])
+    column_order = frame[x_column].drop_duplicates().astype(str).tolist()
     pivot = frame.pivot_table(
         index="sector",
-        columns="week",
+        columns=x_column,
         values="flow_yi",
         aggfunc="sum",
         fill_value=0,
     )
+    pivot = pivot.reindex(columns=[column for column in column_order if column in pivot.columns])
     values = pivot.abs().stack()
     limit = float(values.quantile(clip_quantile)) if not values.empty else 0.0
     if limit > 0:
@@ -155,7 +187,7 @@ def leader_changes(weekly: pd.DataFrame) -> dict:
     segments: list[dict] = []
     for item in top.to_dict("records"):
         sector = str(item.get("sector", ""))
-        week = str(item.get("week", ""))
+        week = str(item.get("week_label") or item.get("week", ""))
         if not leaders or leaders[-1] != sector:
             leaders.append(sector)
             segments.append(

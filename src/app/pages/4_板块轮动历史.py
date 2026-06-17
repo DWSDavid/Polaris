@@ -6,8 +6,9 @@ import streamlit as st
 
 from src.app.ui import apply_theme, hero, metric_grid, page_intro, plotly_template, section, status_line
 from src.compute.rotation_history import summarize_sector_track
-from src.data.sector_groups import aggregate_timeline_to_groups
+from src.data.sector_groups import SECTOR_GROUP_DESCRIPTIONS, aggregate_timeline_to_groups
 from src.pipeline.rotation_timeline import (
+    filter_rotation_groups,
     fetch_rotation_timeline,
     heatmap_flow_matrix,
     leader_changes,
@@ -41,9 +42,10 @@ def render_page() -> None:
         st.info("东财行业历史暂不可用，稍后重试。")
         return
 
-    weekly = weekly_rank(timeline)
+    weekly_all = weekly_rank(timeline)
+    weekly = filter_rotation_groups(weekly_all)
     changes = leader_changes(weekly)
-    latest_week = str(weekly["week"].max())
+    latest_week = _latest_week_label(weekly)
     latest_leader = _latest_leader(weekly)
     hero(
         "板块轮动历史",
@@ -59,8 +61,8 @@ def render_page() -> None:
         ]
     )
 
-    bump_tab, heat_tab, leader_tab, stats_tab = st.tabs(
-        ["排名带状图", "资金接力热力图", "龙头更替", "Stats"]
+    bump_tab, heat_tab, leader_tab, explain_tab, stats_tab = st.tabs(
+        ["排名带状图", "资金接力热力图", "龙头更替", "大类说明", "Stats"]
     )
     with bump_tab:
         _render_bump_chart(weekly)
@@ -68,6 +70,8 @@ def render_page() -> None:
         _render_flow_heatmap(weekly)
     with leader_tab:
         _render_leader_changes(changes)
+    with explain_tab:
+        _render_group_descriptions(weekly)
     with stats_tab:
         _render_stats(timeline)
 
@@ -89,17 +93,24 @@ def _render_bump_chart(weekly: pd.DataFrame) -> None:
     view = weekly[weekly["sector"].isin(top_sectors)].copy()
     fig = px.line(
         view,
-        x="week",
+        x="week_label",
         y="rank",
         color="sector",
         markers=True,
-        hover_data=["strength", "main_net_inflow"],
+        hover_data=["week", "strength", "main_net_inflow"],
     )
     plotly_template(fig)
     fig.update_yaxes(autorange="reversed", dtick=1, title="周排名")
-    fig.update_xaxes(title="周")
+    week_order = _week_order(view)
+    fig.update_xaxes(
+        title="周区间（不是月份）",
+        type="category",
+        categoryorder="array",
+        categoryarray=week_order,
+    )
     fig.update_layout(height=460)
     st.plotly_chart(fig, width="stretch")
+    st.caption("横轴是交易周区间，例如“06/15-06/21 · 第25周”，不是 2026 年 25 月。")
 
 
 def _render_flow_heatmap(weekly: pd.DataFrame) -> None:
@@ -145,6 +156,17 @@ def _render_leader_changes(changes: dict) -> None:
         height=260,
         column_config={"段末强度": st.column_config.NumberColumn(format="%.2f")},
     )
+
+
+def _render_group_descriptions(weekly: pd.DataFrame) -> None:
+    section("大类说明", "这些是东财细分行业上卷后的可读大类；“综合/其他”不参与主线领跑。")
+    sectors = weekly["sector"].dropna().astype(str).drop_duplicates().tolist() if not weekly.empty else []
+    rows = [
+        {"大类": sector, "是什么意思": SECTOR_GROUP_DESCRIPTIONS.get(sector, "暂无解释")}
+        for sector in sectors
+    ]
+    rows.append({"大类": "综合", "是什么意思": SECTOR_GROUP_DESCRIPTIONS["综合"]})
+    st.dataframe(pd.DataFrame(rows), width="stretch", height=360, hide_index=True)
 
 
 def _render_stats(timeline: pd.DataFrame) -> None:
@@ -194,6 +216,23 @@ def _latest_leader(weekly: pd.DataFrame) -> str:
         return "-"
     latest = weekly[weekly["week"] == weekly["week"].max()].sort_values("rank")
     return str(latest.iloc[0]["sector"]) if not latest.empty else "-"
+
+
+def _latest_week_label(weekly: pd.DataFrame) -> str:
+    if weekly.empty:
+        return "-"
+    latest = weekly.sort_values("week_start" if "week_start" in weekly.columns else "week").iloc[-1]
+    return str(latest.get("week_label") or latest.get("week") or "-")
+
+
+def _week_order(weekly: pd.DataFrame) -> list[str]:
+    if weekly.empty or "week_label" not in weekly.columns:
+        return []
+    if "week_start" in weekly.columns:
+        ordered = weekly.sort_values("week_start")
+    else:
+        ordered = weekly.sort_values("week")
+    return ordered["week_label"].dropna().astype(str).drop_duplicates().tolist()
 
 
 if __name__ == "__main__":

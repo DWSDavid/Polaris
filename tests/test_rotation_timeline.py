@@ -3,6 +3,7 @@ import pytest
 
 from src.pipeline.rotation_timeline import (
     build_rotation_timeline,
+    filter_rotation_groups,
     heatmap_flow_matrix,
     leader_changes,
     select_rotation_sectors,
@@ -34,6 +35,26 @@ def test_timeline_shape_and_rank():
     assert {"date", "sector", "strength", "rank"} <= set(tl.columns)
     assert tl.loc[tl["date"] == "2026-04-01"].sort_values("rank").iloc[0]["sector"] == "证券"
     assert {"week", "sector", "rank"} <= set(wk.columns)
+
+
+def test_weekly_rank_uses_readable_week_range_not_month_like_label():
+    timeline = pd.DataFrame(
+        {
+            "date": ["2026-06-15", "2026-06-16"],
+            "sector": ["电子", "半导体"],
+            "pct_chg": [1.0, 2.0],
+            "amount": [5e10, 6e10],
+            "main_net_inflow": [1e8, 2e8],
+            "strength": [3.0, 4.0],
+        }
+    )
+
+    got = weekly_rank(timeline)
+
+    assert set(["week", "week_start", "week_end", "week_label"]) <= set(got.columns)
+    assert got["week"].unique().tolist() == ["2026-W25"]
+    assert got["week_label"].unique().tolist() == ["06/15-06/21 · 第25周"]
+    assert "2026-25" not in got["week_label"].iloc[0]
 
 
 def test_timeline_tolerates_missing_flow_column():
@@ -290,6 +311,23 @@ def test_leader_changes_reports_weekly_handoff():
     assert changes["segments"][0]["sector"] == "证券"
 
 
+def test_filter_rotation_groups_removes_vague_buckets_from_top_level():
+    weekly = pd.DataFrame(
+        {
+            "week": ["2026-W25"] * 4,
+            "week_label": ["06/15-06/21 · 第25周"] * 4,
+            "sector": ["综合", "其他", "电子", "通信"],
+            "rank": [1, 2, 3, 4],
+            "strength": [10.0, 9.0, 8.0, 7.0],
+            "main_net_inflow": [5e8, 4e8, 3e8, 2e8],
+        }
+    )
+
+    filtered = filter_rotation_groups(weekly)
+
+    assert filtered["sector"].tolist() == ["电子", "通信"]
+
+
 def test_select_rotation_sectors_keeps_multiple_groups():
     weekly = pd.DataFrame(
         {
@@ -306,6 +344,24 @@ def test_select_rotation_sectors_keeps_multiple_groups():
     assert len(selected) >= 4
     assert "电子" in selected
     assert "证券" in selected
+
+
+def test_select_rotation_sectors_skips_vague_groups():
+    weekly = pd.DataFrame(
+        {
+            "week": ["2026-W25"] * 5,
+            "sector": ["综合", "其他", "电子", "通信", "金融"],
+            "rank": [1, 2, 3, 4, 5],
+            "strength": [10, 9, 8, 7, 6],
+            "main_net_inflow": [9e8, 8e8, 7e8, 6e8, 5e8],
+        }
+    )
+
+    selected = select_rotation_sectors(weekly, min_groups=2, max_groups=4)
+
+    assert "综合" not in selected
+    assert "其他" not in selected
+    assert selected[:2] == ["电子", "通信"]
 
 
 def test_heatmap_flow_matrix_clips_outliers_and_uses_yi_units():
@@ -325,3 +381,20 @@ def test_heatmap_flow_matrix_clips_outliers_and_uses_yi_units():
     assert limit <= 3.0
     assert matrix.to_numpy().max() <= 3.0
     assert matrix.to_numpy().min() >= -3.0
+
+
+def test_heatmap_flow_matrix_uses_readable_week_labels_when_available():
+    weekly = pd.DataFrame(
+        {
+            "week": ["2026-W25", "2026-W26"],
+            "week_label": ["06/15-06/21 · 第25周", "06/22-06/28 · 第26周"],
+            "sector": ["电子", "电子"],
+            "rank": [1, 2],
+            "strength": [8, 7],
+            "main_net_inflow": [2e8, 3e8],
+        }
+    )
+
+    matrix, _ = heatmap_flow_matrix(weekly, max_groups=1)
+
+    assert matrix.columns.tolist() == ["06/15-06/21 · 第25周", "06/22-06/28 · 第26周"]

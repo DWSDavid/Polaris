@@ -1,6 +1,11 @@
 import pandas as pd
 
-from src.data.sector_groups import aggregate_to_groups, aggregate_timeline_to_groups, map_to_group
+from src.data.sector_groups import (
+    SECTOR_GROUP_DESCRIPTIONS,
+    aggregate_to_groups,
+    aggregate_timeline_to_groups,
+    map_to_group,
+)
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
 
@@ -27,6 +32,12 @@ def test_fine_sector_maps_to_group():
     assert map_to_group("啤酒") == "消费"
     assert map_to_group("高速公路") == "交通运输"
     assert map_to_group("金融控股") == "金融"
+
+
+def test_sector_group_descriptions_explain_vague_comprehensive_bucket():
+    assert "综合" in SECTOR_GROUP_DESCRIPTIONS
+    assert "不参与主线领跑" in SECTOR_GROUP_DESCRIPTIONS["综合"]
+    assert "钨" in SECTOR_GROUP_DESCRIPTIONS["原材料"]
 
 
 def test_aggregate_rolls_up():
