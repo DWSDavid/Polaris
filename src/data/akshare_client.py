@@ -12,6 +12,17 @@ _DAILY_COLS = {
     "涨跌幅": "pct",
 }
 
+_INDIVIDUAL_FLOW_COLS = {
+    "日期": "date",
+    "主力净流入-净额": "main_net_inflow",
+    "主力净流入净额": "main_net_inflow",
+    "主力净流入-净占比": "main_net_inflow_pct",
+    "超大单净流入-净额": "super_large_inflow",
+    "大单净流入-净额": "large_inflow",
+    "中单净流入-净额": "medium_inflow",
+    "小单净流入-净额": "small_inflow",
+}
+
 
 def _call_with_retry(fn, *args, attempts: int = 3):
     last_error = None
@@ -136,9 +147,38 @@ def individual_fund_flow(symbol: str) -> pd.DataFrame:
     hit = cache.read("akshare", "individual_flow", key)
     if hit is not None:
         return hit
-    df = _raw_individual_fund_flow(symbol[2:], symbol[:2].lower())
+    df = normalize_individual_fund_flow(
+        _raw_individual_fund_flow(symbol[2:], symbol[:2].lower())
+    )
     cache.write("akshare", "individual_flow", key, df)
     return df
+
+
+def normalize_individual_fund_flow(raw: pd.DataFrame) -> pd.DataFrame:
+    if raw.empty:
+        return pd.DataFrame(
+            columns=[
+                "date",
+                "main_net_inflow",
+                "main_net_inflow_pct",
+                "super_large_inflow",
+                "large_inflow",
+                "medium_inflow",
+                "small_inflow",
+            ]
+        )
+    renamed = raw.rename(columns=_INDIVIDUAL_FLOW_COLS)
+    columns = list(
+        dict.fromkeys(
+            column for column in _INDIVIDUAL_FLOW_COLS.values() if column in renamed.columns
+        )
+    )
+    out = renamed[columns].copy()
+    if "date" in out.columns:
+        out["date"] = out["date"].astype(str)
+    for column in [column for column in out.columns if column != "date"]:
+        out[column] = pd.to_numeric(out[column], errors="coerce")
+    return out
 
 
 def _raw_sector_fund_flow() -> pd.DataFrame:

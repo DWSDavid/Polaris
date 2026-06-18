@@ -16,6 +16,7 @@ def test_streamlit_pages_exist_and_compile():
         Path("src/app/pages/4_板块轮动历史.py"),
         Path("src/app/pages/5_投资方向.py"),
         Path("src/app/pages/6_风格风口研究.py"),
+        Path("src/app/pages/7_个股分析.py"),
     ]
     for path in paths:
         assert path.exists()
@@ -33,6 +34,7 @@ def test_streamlit_navigation_only_contains_v2_pages():
     assert "4_板块轮动历史.py" in page_names
     assert "5_投资方向.py" in page_names
     assert "6_风格风口研究.py" in page_names
+    assert "7_个股分析.py" in page_names
     assert "1_板块轮动排名.py" not in page_names
     assert "3_个股观察.py" not in page_names
     assert "4_龙头联动分析.py" not in page_names
@@ -149,6 +151,7 @@ def test_all_pages_surface_a_plain_language_page_intro():
         Path("src/app/pages/4_板块轮动历史.py"),
         Path("src/app/pages/5_投资方向.py"),
         Path("src/app/pages/6_风格风口研究.py"),
+        Path("src/app/pages/7_个股分析.py"),
     ]
 
     for path in paths:
@@ -237,6 +240,19 @@ def test_regime_research_page_connects_regime_engine_and_ai():
     assert "macro_context" in page
     assert "regime_brief" in page
     assert "plotly_template" in page
+    assert "st.code(" not in page
+
+
+def test_stock_analysis_page_connects_stock_context_decision_and_ai():
+    page = Path("src/app/pages/7_个股分析.py").read_text(encoding="utf-8")
+
+    assert "build_stock_analysis_payload" in page
+    assert "evaluate_stock_setup" in page
+    assert "stock_advice" in page
+    assert "技术面" in page
+    assert "资金面" in page
+    assert "行业背景" in page
+    assert "TradingAgents-style" in page
     assert "st.code(" not in page
 
 

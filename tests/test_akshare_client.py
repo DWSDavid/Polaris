@@ -34,3 +34,19 @@ def test_daily_hist_retries_transient_failure(tmp_path):
         data = ac.daily_hist("SH600519", "20260101", "20260529")
     assert raw.call_count == 3
     assert list(data["close"]) == [10.0]
+
+
+def test_normalize_individual_fund_flow_maps_real_chinese_columns():
+    raw = pd.DataFrame(
+        {
+            "日期": ["2026-06-17", "2026-06-18"],
+            "主力净流入-净额": [100_000_000, -50_000_000],
+            "主力净流入-净占比": [3.2, -1.4],
+        }
+    )
+
+    out = ac.normalize_individual_fund_flow(raw)
+
+    assert out["date"].tolist() == ["2026-06-17", "2026-06-18"]
+    assert out["main_net_inflow"].tolist() == [100_000_000, -50_000_000]
+    assert out["main_net_inflow_pct"].tolist() == [3.2, -1.4]
