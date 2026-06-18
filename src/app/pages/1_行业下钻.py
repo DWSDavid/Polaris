@@ -26,6 +26,7 @@ from src.compute.linkage_stats import leader_linkage_report
 from src.compute.rotation_history import build_rotation_chain, summarize_flow_rotation
 from src.compute.trend_v2 import streak_days
 from src.data import em_client
+from src.data.sector_groups import VAGUE_GROUPS, map_to_group
 from src.data.universe_v2 import build_universe, filter_noise, pick_leaders
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -76,14 +77,39 @@ def render_page() -> None:
         status_line("东财实时未接入，行业下钻暂不可用")
         return
 
+    picker = realtime.copy()
+    picker["group"] = picker["sector"].map(map_to_group)
+    picker = picker.loc[~picker["group"].isin(VAGUE_GROUPS)].copy()
+    if picker.empty:
+        picker = realtime.copy()
+        picker["group"] = picker["sector"].map(map_to_group)
+    group_options = (
+        picker.sort_values(["pct_chg", "main_net_inflow"], ascending=False)["group"]
+        .dropna()
+        .astype(str)
+        .drop_duplicates()
+        .tolist()
+    )
+    default_group = "金融" if "金融" in group_options else group_options[0]
+    selected_group = st.selectbox(
+        "选择大类",
+        group_options,
+        index=group_options.index(default_group),
+    )
     sectors = (
-        realtime.sort_values(["pct_chg", "main_net_inflow"], ascending=False)["sector"]
+        picker[picker["group"] == selected_group]
+        .sort_values(["pct_chg", "main_net_inflow"], ascending=False)["sector"]
         .dropna()
         .astype(str)
         .tolist()
     )
-    default_index = sectors.index("银行") if "银行" in sectors else 0
-    sector = st.selectbox("选择行业", sectors, index=default_index)
+    preferred_sector = "证券" if "证券" in sectors else ("银行" if "银行" in sectors else sectors[0])
+    sector = st.selectbox(
+        "选择细分行业",
+        sectors,
+        index=sectors.index(preferred_sector),
+    )
+    st.caption(f"{selected_group} 下共 {len(sectors)} 个细分行业；下钻始终用东财细分行业原始数据。")
 
     try:
         data = get_sector_drilldown(sector)

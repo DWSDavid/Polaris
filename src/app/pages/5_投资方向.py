@@ -15,7 +15,16 @@ from src.compute.mainline import mainline_score
 from src.compute.synthesis import direction_score, rank_directions
 from src.compute.trust import TRUST_DISCLAIMER, trust_badge, with_disclaimer
 from src.data import em_client, em_context
-from src.data.sector_groups import aggregate_timeline_to_groups, aggregate_to_groups
+from src.data.sector_groups import (
+    aggregate_timeline_to_groups,
+    aggregate_to_groups,
+    filter_actionable_groups,
+)
+from src.pipeline.direction_history import (
+    build_direction_snapshot,
+    load_direction_history,
+    save_direction_snapshot,
+)
 from src.pipeline.rotation_timeline import fetch_rotation_timeline
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -37,13 +46,18 @@ def get_direction_payload() -> dict:
         flow_10d=flow_10d,
         histories=histories,
     )
-    panel = aggregate_to_groups(fine_panel)
+    panel = filter_actionable_groups(aggregate_to_groups(fine_panel))
     panel = mainline_score(panel).sort_values(
         ["mainline_score", "strength_rank"], ascending=False
     )
     context = _load_context(DEFAULT_HOLDING["code"])
     candidates = _build_direction_facts(panel, group_timeline, context)
     ranked = _attach_trust(rank_directions(candidates), as_of)
+    snapshot = build_direction_snapshot(ranked, as_of=as_of)
+    try:
+        save_direction_snapshot(snapshot)
+    except OSError:
+        pass
     return {
         "panel": panel,
         "fine_panel": fine_panel,
@@ -51,6 +65,7 @@ def get_direction_payload() -> dict:
         "group_timeline": group_timeline,
         "context": context,
         "ranked": ranked,
+        "history": load_direction_history(limit=20),
         "as_of": as_of,
     }
 
@@ -116,12 +131,16 @@ def render_page() -> None:
         ]
     )
 
-    direction_tab, evidence_tab, glossary_tab = st.tabs(["方向排序", "佐证", "名词解释"])
+    direction_tab, evidence_tab, history_tab, glossary_tab = st.tabs(
+        ["方向排序", "佐证", "历史记录", "名词解释"]
+    )
     with direction_tab:
         _render_direction_overview(ranked)
         _render_direction_cards(ranked[:6])
     with evidence_tab:
         _render_context(payload["context"])
+    with history_tab:
+        _render_direction_history(payload.get("history", []))
     with glossary_tab:
         _render_glossary()
 
@@ -216,6 +235,28 @@ def _render_context(context: dict) -> None:
         else:
             columns = [col for col in ["publish_time", "title", "source"] if col in news.columns]
             st.dataframe(news[columns].head(8), width="stretch", height=260)
+
+
+def _render_direction_history(history: list[dict]) -> None:
+    section("历史记录", "每天保留一份 Top 方向快照，用来观察建议是否连续，而不是每天追着换仓。")
+    if not history:
+        st.info("还没有历史快照。打开本页后会自动保存当天方向记录。")
+        return
+    rows = []
+    for snapshot in history:
+        top = snapshot.get("top_directions") or []
+        rows.append(
+            {
+                "日期": snapshot.get("date"),
+                "记录时间": snapshot.get("as_of"),
+                "Top方向": "、".join(item.get("sector", "") for item in top[:3]),
+                "Top理由": "；".join(
+                    "、".join(item.get("reasons", [])[:2]) for item in top[:3]
+                ),
+                "摘要": snapshot.get("summary"),
+            }
+        )
+    st.dataframe(pd.DataFrame(rows), width="stretch", height=420, hide_index=True)
 
 
 def _render_glossary() -> None:

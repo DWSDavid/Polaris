@@ -4,6 +4,7 @@ from src.data.sector_groups import (
     SECTOR_GROUP_DESCRIPTIONS,
     aggregate_to_groups,
     aggregate_timeline_to_groups,
+    filter_actionable_groups,
     map_to_group,
 )
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
@@ -77,6 +78,39 @@ def test_aggregate_weighted_fields_downweight_thin_sectors():
     assert row["diffusion"] < 0.5
     assert row["pct_chg"] < 3.0
     assert row["sample_note"] == "样本充足"
+
+
+def test_aggregate_trend_days_uses_dominant_child_not_fractional_average():
+    fine = pd.DataFrame(
+        {
+            "sector": ["钨", "稀土"],
+            "amount": [8e8, 2e8],
+            "main_net_inflow": [1e8, 2e8],
+            "stock_count": [80, 20],
+            "strength": [1.0, 9.0],
+            "trend_days": [0, 7],
+            "state": ["冷启动", "主升扩散"],
+        }
+    )
+
+    got = aggregate_to_groups(fine)
+    row = got[got["group"] == "原材料"].iloc[0]
+
+    assert row["trend_days"] == 7
+    assert float(row["trend_days"]).is_integer()
+
+
+def test_filter_actionable_groups_removes_vague_top_level_buckets():
+    panel = pd.DataFrame(
+        {
+            "sector": ["综合", "其他", "电子"],
+            "score": [9.0, 8.0, 7.0],
+        }
+    )
+
+    got = filter_actionable_groups(panel)
+
+    assert got["sector"].tolist() == ["电子"]
 
 
 def test_sector_panel_keeps_fine_sector_and_group_for_drilldown():

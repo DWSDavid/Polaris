@@ -233,6 +233,8 @@ SECTOR_GROUP_DESCRIPTIONS: dict[str, str] = {
     "其他": "暂未识别到稳定归属的细分行业；正常情况下不应进入主线领跑。",
 }
 
+VAGUE_GROUPS = ("综合", "其他")
+
 SUM_COLUMNS = (
     "amount",
     "main_net_inflow",
@@ -248,7 +250,6 @@ WEIGHTED_COLUMNS = (
     "diffusion",
     "strength",
     "strength_rank",
-    "trend_days",
     "volume_amp",
     "leader_contrib",
     "position_in_box",
@@ -296,6 +297,9 @@ def aggregate_to_groups(fine_df: pd.DataFrame) -> pd.DataFrame:
         for column in WEIGHTED_COLUMNS:
             if column in part.columns:
                 row[column] = _weighted_average(part[column], weights)
+        if "trend_days" in part.columns:
+            row["trend_days"] = _representative_trend_days(part, weights)
+            row["trend_days_source"] = _representative_child(part)
         if "turning_point" in part.columns:
             row["turning_point"] = bool(part["turning_point"].fillna(False).astype(bool).any())
         if "fund_inflow" in part.columns:
@@ -355,6 +359,16 @@ def aggregate_timeline_to_groups(timeline: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values(sort_columns).reset_index(drop=True)
 
 
+def filter_actionable_groups(
+    frame: pd.DataFrame,
+    column: str = "sector",
+    excluded: tuple[str, ...] = VAGUE_GROUPS,
+) -> pd.DataFrame:
+    if frame.empty or column not in frame.columns:
+        return frame.copy()
+    return frame.loc[~frame[column].fillna("").astype(str).isin(excluded)].copy()
+
+
 def _strip_suffix(text: str) -> str:
     for suffix in ("Ⅰ", "Ⅱ", "Ⅲ", "IV", "II", "III"):
         text = text.replace(suffix, "")
@@ -381,6 +395,32 @@ def _weighted_average(values: pd.Series, weights: pd.Series) -> float:
     if denominator == 0:
         return float(nums[mask].mean())
     return float((nums[mask] * used_weights).sum() / denominator)
+
+
+def _representative_trend_days(part: pd.DataFrame, weights: pd.Series) -> int:
+    dominant = _dominant_row(part)
+    value = pd.to_numeric(pd.Series([dominant.get("trend_days")]), errors="coerce").iloc[0]
+    if pd.notna(value):
+        return int(round(float(value)))
+    return int(round(_weighted_average(part["trend_days"], weights)))
+
+
+def _representative_child(part: pd.DataFrame) -> str:
+    dominant = _dominant_row(part)
+    return str(dominant.get("sector", ""))
+
+
+def _dominant_row(part: pd.DataFrame) -> pd.Series:
+    if part.empty:
+        return pd.Series(dtype=object)
+    for column in ("strength", "mainline_score", "amount"):
+        if column in part.columns:
+            ordered = part.assign(
+                _dominant=pd.to_numeric(part[column], errors="coerce")
+            ).sort_values("_dominant", ascending=False, na_position="last")
+            if not ordered.empty:
+                return ordered.iloc[0]
+    return part.iloc[0]
 
 
 def _join_unique(values: pd.Series, limit: int = 5) -> str:

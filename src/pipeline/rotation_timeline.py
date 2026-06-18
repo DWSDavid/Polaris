@@ -178,6 +178,43 @@ def heatmap_flow_matrix(
     return pivot, limit
 
 
+def relative_flow_heatmap_matrix(
+    weekly: pd.DataFrame,
+    max_groups: int = 18,
+) -> tuple[pd.DataFrame, float]:
+    if weekly.empty:
+        return pd.DataFrame(), 0.0
+    weekly = filter_rotation_groups(weekly)
+    if weekly.empty:
+        return pd.DataFrame(), 0.0
+    selected = select_rotation_sectors(
+        weekly, min_groups=min(6, max_groups), max_groups=max_groups
+    )
+    frame = weekly[weekly["sector"].astype(str).isin(selected)].copy()
+    frame["flow_yi"] = (
+        pd.to_numeric(frame["main_net_inflow"], errors="coerce").fillna(0)
+        / 100_000_000
+    )
+    x_column = "week_label" if "week_label" in frame.columns else "week"
+    if "week_start" in frame.columns:
+        frame = frame.sort_values(["week_start", "sector"])
+    column_order = frame[x_column].drop_duplicates().astype(str).tolist()
+    frame["relative_flow_score"] = frame.groupby(x_column, group_keys=False)[
+        "flow_yi"
+    ].apply(_relative_scores)
+    pivot = frame.pivot_table(
+        index="sector",
+        columns=x_column,
+        values="relative_flow_score",
+        aggfunc="mean",
+        fill_value=0,
+    )
+    pivot = pivot.reindex(
+        columns=[column for column in column_order if column in pivot.columns]
+    )
+    return pivot, 100.0
+
+
 def leader_changes(weekly: pd.DataFrame) -> dict:
     if weekly.empty:
         return {"leaders": [], "path": "", "segments": [], "summary": "暂无轮动样本。"}
@@ -188,6 +225,8 @@ def leader_changes(weekly: pd.DataFrame) -> dict:
     for item in top.to_dict("records"):
         sector = str(item.get("sector", ""))
         week = str(item.get("week_label") or item.get("week", ""))
+        week_start = _to_timestamp(item.get("week_start"))
+        week_end = _to_timestamp(item.get("week_end"))
         if not leaders or leaders[-1] != sector:
             leaders.append(sector)
             segments.append(
@@ -196,15 +235,28 @@ def leader_changes(weekly: pd.DataFrame) -> dict:
                     "start_week": week,
                     "end_week": week,
                     "strength": float(item.get("strength", 0) or 0),
+                    "_start_dt": week_start,
+                    "_end_dt": week_end,
                 }
             )
         else:
             segments[-1]["end_week"] = week
             segments[-1]["strength"] = float(item.get("strength", 0) or 0)
+            if week_end is not None:
+                segments[-1]["_end_dt"] = week_end
 
     path = "→".join(leaders)
     summary = f"过去窗口的领涨路径：{path}。" if path else "暂无轮动样本。"
-    return {"leaders": leaders, "path": path, "segments": segments, "summary": summary}
+    public_segments = []
+    for segment in segments:
+        out = {
+            key: value for key, value in segment.items() if not key.startswith("_")
+        }
+        out["duration_days"] = _duration_days(
+            segment.get("_start_dt"), segment.get("_end_dt")
+        )
+        public_segments.append(out)
+    return {"leaders": leaders, "path": path, "segments": public_segments, "summary": summary}
 
 
 def fetch_rotation_timeline(days: int = 90, max_sectors: int = 60) -> pd.DataFrame:
@@ -269,6 +321,29 @@ def _num_column(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(0.0, index=frame.index)
     return pd.to_numeric(frame[column], errors="coerce").fillna(0.0)
+
+
+def _relative_scores(values: pd.Series) -> pd.Series:
+    nums = pd.to_numeric(values, errors="coerce").fillna(0)
+    if len(nums) <= 1 or nums.nunique() <= 1:
+        return pd.Series(0.0, index=values.index)
+    ranks = nums.rank(method="average", ascending=True)
+    return ((ranks - 1) / (len(nums) - 1) * 200 - 100).fillna(0)
+
+
+def _to_timestamp(value) -> pd.Timestamp | None:
+    if value is None or pd.isna(value):
+        return None
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed
+
+
+def _duration_days(start: pd.Timestamp | None, end: pd.Timestamp | None) -> int:
+    if start is None or end is None:
+        return 0
+    return max(1, int((end - start).days) + 1)
 
 
 def _window_from_flow(

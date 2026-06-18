@@ -19,7 +19,7 @@ from src.app.ui import (
 from src.compute.hot_focus import build_hot_dragon_focus
 from src.compute.mainline import mainline_breakdown, mainline_score, pick_mainline
 from src.data import em_client, em_context
-from src.data.sector_groups import aggregate_to_groups
+from src.data.sector_groups import aggregate_to_groups, filter_actionable_groups
 from src.data.universe_v2 import build_universe
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
@@ -57,7 +57,7 @@ def get_sector_panel():
         histories=histories,
         leaders=leaders,
     )
-    panel = aggregate_to_groups(fine_panel)
+    panel = filter_actionable_groups(aggregate_to_groups(fine_panel))
     return mainline_score(panel).sort_values(
         ["mainline_score", "strength_rank"], ascending=False
     )
@@ -188,7 +188,9 @@ def _render_market_treemap(panel: pd.DataFrame):
         margin=dict(t=8, l=0, r=0, b=0),
     )
     st.plotly_chart(fig, width="stretch")
-    st.caption("大小=成交额，颜色=涨跌幅；hover 可看主力净流入、10日资金、趋势持续天数和龙头。")
+    st.caption(
+        "大小=成交额，颜色=涨跌幅；持续天数按主导细分板块取整数，不再把多个细分行业平均成 0.7 天。"
+    )
 
 
 def _render_candidate_table(panel: pd.DataFrame):
@@ -196,6 +198,7 @@ def _render_candidate_table(panel: pd.DataFrame):
     table["10日净流入(亿)"] = table["inflow_10d"].map(_yi)
     table["今日主力(亿)"] = table["main_net_inflow"].map(_yi)
     table["成交额(亿)"] = table["amount"].map(_yi)
+    table["trend_days"] = table["trend_days"].map(_int_days)
     table["细分板块"] = table["children"].map(_children_text) if "children" in table.columns else ""
     table = table[
         [
@@ -368,6 +371,12 @@ def _yi(value) -> float:
     if pd.isna(value):
         return 0.0
     return float(value) / 100_000_000
+
+
+def _int_days(value) -> int:
+    if pd.isna(value):
+        return 0
+    return int(round(float(value)))
 
 
 def _children_text(value, limit: int = 6) -> str:

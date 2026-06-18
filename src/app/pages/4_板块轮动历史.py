@@ -6,21 +6,43 @@ import streamlit as st
 
 from src.app.ui import apply_theme, hero, metric_grid, page_intro, plotly_template, section, status_line
 from src.compute.rotation_history import summarize_sector_track
-from src.data.sector_groups import SECTOR_GROUP_DESCRIPTIONS, aggregate_timeline_to_groups
+from src.data import em_client
+from src.data.sector_groups import (
+    SECTOR_GROUP_DESCRIPTIONS,
+    aggregate_timeline_to_groups,
+    aggregate_to_groups,
+    filter_actionable_groups,
+)
 from src.pipeline.rotation_timeline import (
     filter_rotation_groups,
     fetch_rotation_timeline,
     heatmap_flow_matrix,
     leader_changes,
+    relative_flow_heatmap_matrix,
     select_rotation_sectors,
     weekly_rank,
 )
+from src.pipeline.sector_panel_v2 import build_sector_panel_v2
 
 
 @st.cache_data(ttl=3600)
 def get_rotation_timeline(days: int = 100, max_sectors: int = 32) -> pd.DataFrame:
     fine_timeline = fetch_rotation_timeline(days=days, max_sectors=max_sectors)
     return aggregate_timeline_to_groups(fine_timeline)
+
+
+@st.cache_data(ttl=600)
+def get_rotation_context_panel() -> dict[str, pd.DataFrame]:
+    realtime = em_client.industry_realtime()
+    flow_5d = em_client.industry_fund_flow("5日")
+    flow_10d = em_client.industry_fund_flow("10日")
+    fine_panel = build_sector_panel_v2(
+        industry_realtime=realtime,
+        flow_5d=flow_5d,
+        flow_10d=flow_10d,
+    )
+    group_panel = filter_actionable_groups(aggregate_to_groups(fine_panel))
+    return {"fine_panel": fine_panel, "group_panel": group_panel}
 
 
 def render_page() -> None:
@@ -70,6 +92,7 @@ def render_page() -> None:
         _render_flow_heatmap(weekly)
     with leader_tab:
         _render_leader_changes(changes)
+        _render_leader_context(changes)
     with explain_tab:
         _render_group_descriptions(weekly)
     with stats_tab:
@@ -114,11 +137,14 @@ def _render_bump_chart(weekly: pd.DataFrame) -> None:
 
 
 def _render_flow_heatmap(weekly: pd.DataFrame) -> None:
-    section("资金接力热力图", "红色为周度净流入更强，绿色为转弱流出。")
+    section(
+        "资金接力热力图",
+        "默认看相对接力：红色代表本周在所有大类里相对更强，不等于绝对流入。",
+    )
     if weekly.empty:
         st.info("资金接力样本不足。")
         return
-    pivot, limit = heatmap_flow_matrix(weekly, max_groups=18)
+    pivot, limit = relative_flow_heatmap_matrix(weekly, max_groups=18)
     if pivot.empty:
         st.info("资金接力样本不足。")
         return
@@ -128,12 +154,17 @@ def _render_flow_heatmap(weekly: pd.DataFrame) -> None:
         color_continuous_scale="RdYlGn_r",
         zmin=-limit if limit else None,
         zmax=limit if limit else None,
-        labels=dict(x="周", y="行业", color="净流入(亿)"),
+        labels=dict(x="周", y="行业", color="相对接力分"),
     )
     plotly_template(fig)
-    fig.update_layout(height=560, coloraxis_colorbar=dict(title="净流入(亿)"))
+    fig.update_layout(height=560, coloraxis_colorbar=dict(title="相对接力"))
     st.plotly_chart(fig, width="stretch")
-    st.caption("色阶按分位数裁剪，避免单周极端资金把其他板块全部压成同一种颜色。")
+    st.caption(
+        "如果全市场资金都在流出，绝对净流入会一片绿；这里按每周横向排名重算，红色表示相对少流出或更有接力。"
+    )
+    with st.expander("查看绝对净流入矩阵"):
+        absolute, _ = heatmap_flow_matrix(weekly, max_groups=18)
+        st.dataframe(absolute, width="stretch", height=260)
 
 
 def _render_leader_changes(changes: dict) -> None:
@@ -149,6 +180,7 @@ def _render_leader_changes(changes: dict) -> None:
                 "sector": "领跑行业",
                 "start_week": "开始周",
                 "end_week": "结束周",
+                "duration_days": "持续天数",
                 "strength": "段末强度",
             }
         ),
@@ -156,6 +188,57 @@ def _render_leader_changes(changes: dict) -> None:
         height=260,
         column_config={"段末强度": st.column_config.NumberColumn(format="%.2f")},
     )
+
+
+def _render_leader_context(changes: dict) -> None:
+    section("领跑段落细节", "把每段领跑大类拆到细分行业和代表领涨股，判断是否真的可跟踪。")
+    segments = pd.DataFrame(changes.get("segments", []))
+    if segments.empty:
+        return
+    try:
+        context = get_rotation_context_panel()
+    except Exception as exc:
+        st.info(f"实时细分快照暂不可用：{exc}")
+        return
+    detail = _leader_context_table(
+        segments,
+        context.get("group_panel", pd.DataFrame()),
+        context.get("fine_panel", pd.DataFrame()),
+    )
+    if detail.empty:
+        st.info("暂未匹配到实时细分板块。")
+        return
+    st.dataframe(detail, width="stretch", height=360, hide_index=True)
+
+
+def _leader_context_table(
+    segments: pd.DataFrame,
+    group_panel: pd.DataFrame,
+    fine_panel: pd.DataFrame,
+) -> pd.DataFrame:
+    rows = []
+    for segment in segments.to_dict("records"):
+        sector = str(segment.get("sector", ""))
+        group_hit = group_panel[group_panel["sector"].astype(str) == sector] if not group_panel.empty else pd.DataFrame()
+        group_row = group_hit.iloc[0] if not group_hit.empty else pd.Series(dtype=object)
+        fine = (
+            fine_panel[fine_panel.get("group", pd.Series(dtype=str)).astype(str) == sector]
+            if not fine_panel.empty and "group" in fine_panel.columns
+            else pd.DataFrame()
+        )
+        rows.append(
+            {
+                "领跑大类": sector,
+                "领跑周期": f"{segment.get('start_week')} → {segment.get('end_week')}",
+                "持续天数": int(segment.get("duration_days", 0) or 0),
+                "最近涨幅": _pct_label(group_row.get("pct_chg")),
+                "10日资金": _yi_label(group_row.get("inflow_10d"), signed=True),
+                "主导细分": group_row.get("trend_days_source", ""),
+                "细分板块": _top_children(group_row.get("children"), fine),
+                "代表领涨股": _leading_stock_text(fine),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def _render_group_descriptions(weekly: pd.DataFrame) -> None:
@@ -233,6 +316,54 @@ def _week_order(weekly: pd.DataFrame) -> list[str]:
     else:
         ordered = weekly.sort_values("week")
     return ordered["week_label"].dropna().astype(str).drop_duplicates().tolist()
+
+
+def _top_children(children, fine: pd.DataFrame, limit: int = 6) -> str:
+    if not fine.empty:
+        ordered = fine.assign(_pct=pd.to_numeric(fine.get("pct_chg"), errors="coerce")).sort_values(
+            "_pct", ascending=False
+        )
+        names = [
+            f"{row.sector}({_pct_label(row.pct_chg)})"
+            for row in ordered.head(limit).itertuples()
+        ]
+        return "、".join(names)
+    if isinstance(children, (list, tuple, set)):
+        return "、".join(str(item) for item in list(children)[:limit])
+    return str(children or "")
+
+
+def _leading_stock_text(fine: pd.DataFrame, limit: int = 6) -> str:
+    if fine.empty or "leading_stock" not in fine.columns:
+        return ""
+    ordered = fine.assign(
+        _pct=pd.to_numeric(fine.get("leading_stock_pct_chg"), errors="coerce")
+    ).sort_values("_pct", ascending=False, na_position="last")
+    names = []
+    for row in ordered.head(limit).itertuples():
+        stock = str(getattr(row, "leading_stock", "") or "")
+        if not stock:
+            continue
+        names.append(f"{stock}({_pct_label(getattr(row, 'leading_stock_pct_chg', None))})")
+    return "、".join(names)
+
+
+def _yi_label(value, signed: bool = False) -> str:
+    try:
+        amount = 0.0 if pd.isna(value) else float(value) / 100_000_000
+    except (TypeError, ValueError):
+        amount = 0.0
+    prefix = "+" if signed and amount > 0 else ""
+    return f"{prefix}{amount:.1f}亿"
+
+
+def _pct_label(value) -> str:
+    try:
+        if pd.isna(value):
+            return "-"
+        return f"{float(value):+.2f}%"
+    except (TypeError, ValueError):
+        return "-"
 
 
 if __name__ == "__main__":

@@ -184,6 +184,9 @@ def test_rotation_history_page_uses_timeline_visuals():
     assert "categoryarray" in page
     assert "select_rotation_sectors" in page
     assert "heatmap_flow_matrix" in page
+    assert "relative_flow_heatmap_matrix" in page
+    assert "相对接力" in page
+    assert "_render_leader_context" in page
     assert "综合" in page
     assert "大类说明" in page
     assert "这页回答" in page
@@ -201,6 +204,9 @@ def test_investment_direction_page_connects_synthesis_context_and_ai():
 
     assert "rank_directions" in page
     assert "aggregate_to_groups" in page
+    assert "filter_actionable_groups" in page
+    assert "save_direction_snapshot" in page
+    assert "历史记录" in page
     assert "trust_badge" in page
     assert "TRUST_DISCLAIMER" in page
     assert "凭据强度" in page
@@ -212,6 +218,14 @@ def test_investment_direction_page_connects_synthesis_context_and_ai():
     assert "research_reports" in page
     assert "stock_news" in page
     assert "st.code(" not in page
+
+
+def test_industry_drilldown_has_group_then_fine_sector_picker():
+    page = Path("src/app/pages/1_行业下钻.py").read_text(encoding="utf-8")
+
+    assert "map_to_group" in page
+    assert "选择大类" in page
+    assert "选择细分行业" in page
 
 
 def test_regime_research_page_connects_regime_engine_and_ai():

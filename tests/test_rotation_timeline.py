@@ -6,6 +6,7 @@ from src.pipeline.rotation_timeline import (
     filter_rotation_groups,
     heatmap_flow_matrix,
     leader_changes,
+    relative_flow_heatmap_matrix,
     select_rotation_sectors,
     weekly_rank,
 )
@@ -298,6 +299,12 @@ def test_leader_changes_reports_weekly_handoff():
     weekly = pd.DataFrame(
         {
             "week": ["2026-14", "2026-14", "2026-15", "2026-15"],
+            "week_start": pd.to_datetime(
+                ["2026-03-30", "2026-03-30", "2026-04-06", "2026-04-06"]
+            ),
+            "week_end": pd.to_datetime(
+                ["2026-04-05", "2026-04-05", "2026-04-12", "2026-04-12"]
+            ),
             "sector": ["证券", "电子", "证券", "电子"],
             "rank": [1, 2, 2, 1],
             "strength": [8.0, 2.0, 1.0, 9.0],
@@ -309,6 +316,7 @@ def test_leader_changes_reports_weekly_handoff():
     assert changes["leaders"] == ["证券", "电子"]
     assert changes["path"] == "证券→电子"
     assert changes["segments"][0]["sector"] == "证券"
+    assert changes["segments"][0]["duration_days"] == 7
 
 
 def test_filter_rotation_groups_removes_vague_buckets_from_top_level():
@@ -398,3 +406,22 @@ def test_heatmap_flow_matrix_uses_readable_week_labels_when_available():
     matrix, _ = heatmap_flow_matrix(weekly, max_groups=1)
 
     assert matrix.columns.tolist() == ["06/15-06/21 · 第25周", "06/22-06/28 · 第26周"]
+
+
+def test_relative_flow_heatmap_shows_relative_winners_when_all_absolute_flow_out():
+    weekly = pd.DataFrame(
+        {
+            "week": ["2026-W25"] * 3,
+            "week_label": ["06/15-06/21 · 第25周"] * 3,
+            "sector": ["金融", "电子", "医药"],
+            "rank": [1, 2, 3],
+            "strength": [8, 7, 6],
+            "main_net_inflow": [-12e8, -3e8, -8e8],
+        }
+    )
+
+    matrix, limit = relative_flow_heatmap_matrix(weekly, max_groups=3)
+
+    assert limit == 100.0
+    assert matrix.loc["电子", "06/15-06/21 · 第25周"] > 0
+    assert matrix.loc["金融", "06/15-06/21 · 第25周"] < 0
