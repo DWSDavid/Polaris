@@ -71,6 +71,9 @@ def test_home_uses_market_intelligence_workbench():
     assert "_render_candidate_table" in home
     assert "build_hot_dragon_focus" in home
     assert "em_context.hot_rank" in home
+    assert "_hot_focus_histories" in home
+    assert "akshare_client.daily_hist" in home
+    assert "consecutive_up_days" in home
     assert "_render_hot_dragon_focus" in home
     assert "ttl=600" in home
     assert "st.code(" not in home
@@ -251,9 +254,11 @@ def test_stock_analysis_page_connects_stock_context_decision_and_ai():
     assert "stock_advice" in page
     assert "技术面" in page
     assert "资金面" in page
+    assert "历史陷阱" in page
     assert "行业背景" in page
     assert "TradingAgents-style" in page
     assert "st.code(" not in page
+    assert "st.warning(risk) if" not in page
 
 
 def test_industry_drilldown_rotation_table_formats_each_flow_column_once():

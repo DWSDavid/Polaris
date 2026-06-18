@@ -98,8 +98,8 @@ def render_page() -> None:
         ]
     )
 
-    decision_tab, technical_tab, money_tab, context_tab, ai_tab = st.tabs(
-        ["决策摘要", "技术面", "资金面", "行业背景", "AI 与架构"]
+    decision_tab, technical_tab, money_tab, pattern_tab, context_tab, ai_tab = st.tabs(
+        ["决策摘要", "技术面", "资金面", "历史陷阱", "行业背景", "AI 与架构"]
     )
     with decision_tab:
         _render_decision(decision)
@@ -107,6 +107,8 @@ def render_page() -> None:
         _render_technical(payload.get("daily", pd.DataFrame()), facts)
     with money_tab:
         _render_flow(payload.get("flow", pd.DataFrame()), facts)
+    with pattern_tab:
+        _render_pattern_risk(facts)
     with context_tab:
         _render_context(payload)
     with ai_tab:
@@ -124,7 +126,10 @@ def _render_decision(decision: dict) -> None:
     st.subheader("风险")
     risks = decision.get("risk_flags") or ["暂无明显结构性风险"]
     for risk in risks:
-        st.warning(risk) if risk != "暂无明显结构性风险" else st.info(risk)
+        if risk == "暂无明显结构性风险":
+            st.info(risk)
+        else:
+            st.warning(risk)
     st.subheader("今日观察")
     st.write("；".join(decision.get("watch_points") or []))
 
@@ -181,6 +186,35 @@ def _render_flow(flow: pd.DataFrame, facts: dict) -> None:
     plotly_template(fig)
     fig.update_layout(height=360, coloraxis_showscale=False)
     st.plotly_chart(fig, width="stretch")
+
+
+def _render_pattern_risk(facts: dict) -> None:
+    section(
+        "历史陷阱",
+        "检测下跌后的快速反弹是否像历史上的诱多样本：价格反抽、仍在60日线下、资金没有跟上时要更谨慎。",
+    )
+    pattern = facts.get("pattern_risk") or {}
+    report = facts.get("historical_trap") or {}
+    if not pattern:
+        st.info("打开顶部“加载日线资金”后，系统会用日线和资金流检测疑似诱多风险。")
+        return
+
+    metric_grid(
+        [
+            ("当前模式", str(pattern.get("label", "未判断"))),
+            ("风险分", f"{float(pattern.get('risk_score', 0) or 0):.2f}"),
+            ("历史样本", f"{int(float(report.get('sample_count', 0) or 0))} 个"),
+            ("5日中位收益", f"{float(report.get('median_forward_return_5d', 0) or 0):+.1%}"),
+            ("5日胜率", f"{float(report.get('win_rate_5d', 0) or 0):.0%}"),
+        ]
+    )
+    reasons = pattern.get("reasons") or []
+    if reasons:
+        st.subheader("触发原因")
+        st.write("、".join(str(reason) for reason in reasons))
+    st.subheader("历史参考")
+    st.write(report.get("summary", "历史相似样本不足，暂时不能下结论。"))
+    st.caption("这是风险分布，不是买卖指令；真正操作仍要等价格、资金、行业主线同时验证。")
 
 
 def _render_context(payload: dict) -> None:

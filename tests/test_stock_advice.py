@@ -23,15 +23,27 @@ def _facts():
             "reasons": ["行业主线支持", "个股中期结构向上"],
             "risk_flags": [],
         },
+        "pattern_risk": {
+            "label": "疑似诱多风险",
+            "risk_score": 0.78,
+            "reasons": ["中期仍在60日线下", "反弹资金背离"],
+        },
+        "historical_trap": {
+            "sample_count": 12,
+            "median_forward_return_5d": -0.032,
+            "win_rate_5d": 0.25,
+            "summary": "历史疑似诱多样本 12 个",
+        },
     }
 
 
 def test_stock_prompt_uses_trading_agent_style_roles_without_raw_field_names():
     prompt = build_stock_advice_prompt(_facts())
 
-    for keyword in ["结论", "技术面", "资金面", "行业背景", "风控", "真实事实"]:
+    for keyword in ["结论", "技术面", "资金面", "行业背景", "历史陷阱", "风控", "真实事实"]:
         assert keyword in prompt
     assert "华泰证券" in prompt
+    assert "疑似诱多风险" in prompt
     assert "stock_inflow_5d" not in prompt
     assert "position_in_box" not in prompt
     assert "不要编造" in prompt

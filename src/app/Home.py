@@ -18,7 +18,7 @@ from src.app.ui import (
 )
 from src.compute.hot_focus import build_hot_dragon_focus
 from src.compute.mainline import mainline_breakdown, mainline_score, pick_mainline
-from src.data import em_client, em_context
+from src.data import akshare_client, em_client, em_context
 from src.data.sector_groups import aggregate_to_groups, filter_actionable_groups
 from src.data.universe_v2 import build_universe
 from src.pipeline.sector_panel_v2 import build_sector_panel_v2
@@ -66,11 +66,12 @@ def get_sector_panel():
 @st.cache_data(ttl=600)
 def get_hot_dragon_focus():
     hot = em_context.hot_rank(limit=100)
+    histories = _hot_focus_histories(hot)
     try:
         dragon = em_context.dragon_tiger()
     except Exception:
         dragon = pd.DataFrame()
-    return build_hot_dragon_focus(hot, dragon, top_n=100)
+    return build_hot_dragon_focus(hot, dragon, top_n=100, histories=histories)
 
 
 def render_home():
@@ -258,6 +259,8 @@ def _render_hot_dragon_focus():
 
     table = focus.head(40).copy()
     table["龙虎榜净买(亿)"] = table["dragon_tiger_net_buy"].map(_yi)
+    table["consecutive_up_days"] = table["consecutive_up_days"].map(_int_days)
+    table["trend_days"] = table["trend_days"].map(_int_days)
     table = table[
         [
             "hot_rank",
@@ -266,7 +269,11 @@ def _render_hot_dragon_focus():
             "name",
             "latest_price",
             "pct_chg",
+            "consecutive_up_days",
+            "trend_days",
+            "return_20d",
             "dragon_tiger_on_list",
+            "dragon_tiger_latest_date",
             "dragon_tiger_count",
             "龙虎榜净买(亿)",
             "dragon_tiger_reasons",
@@ -280,7 +287,11 @@ def _render_hot_dragon_focus():
             "name": "名称",
             "latest_price": "最新价",
             "pct_chg": "涨跌幅%",
+            "consecutive_up_days": "连涨天数",
+            "trend_days": "趋势持续",
+            "return_20d": "20日涨跌%",
             "dragon_tiger_on_list": "龙虎榜",
+            "dragon_tiger_latest_date": "龙虎榜日期",
             "dragon_tiger_count": "上榜次数",
             "dragon_tiger_reasons": "上榜原因",
             "focus_reason": "为什么盯",
@@ -294,12 +305,13 @@ def _render_hot_dragon_focus():
             "观察分": st.column_config.NumberColumn(format="%.2f"),
             "最新价": st.column_config.NumberColumn(format="%.2f"),
             "涨跌幅%": st.column_config.NumberColumn(format="%+.2f"),
+            "20日涨跌%": st.column_config.NumberColumn(format="%+.2f"),
             "龙虎榜净买(亿)": st.column_config.NumberColumn(format="%+.2f"),
             "龙虎榜": st.column_config.CheckboxColumn(),
         },
     )
     st.caption(
-        "热度榜=东财人气前100；龙虎榜=当日上榜资金行为。这里只做重点观察池，不是买入建议。"
+        "热度榜=东财人气前100；龙虎榜日期显示最近可用上榜日；连涨/趋势优先补热度前12的日线，避免整页刷新过慢。这里只做重点观察池，不是买入建议。"
     )
 
 
@@ -365,6 +377,34 @@ def _build_leaders_for_sectors(sectors: list[str]) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
+
+
+def _hot_focus_histories(hot: pd.DataFrame, limit: int = 12) -> dict[str, pd.DataFrame]:
+    if hot.empty or "code" not in hot.columns:
+        return {}
+    end = datetime.now().strftime("%Y%m%d")
+    start = (datetime.now() - timedelta(days=90)).strftime("%Y%m%d")
+    histories: dict[str, pd.DataFrame] = {}
+    for _, row in hot.head(limit).iterrows():
+        code = str(row.get("code", "") or "").zfill(6)
+        if not code or code == "000000":
+            continue
+        symbol = _symbol_from_hot_row(row)
+        try:
+            hist = akshare_client.daily_hist(symbol, start, end)
+        except Exception:
+            hist = pd.DataFrame()
+        if not hist.empty:
+            histories[code] = hist
+    return histories
+
+
+def _symbol_from_hot_row(row: pd.Series) -> str:
+    market_code = str(row.get("market_code", "") or "").upper()
+    if market_code.startswith(("SH", "SZ")) and len(market_code) >= 8:
+        return market_code[:2] + market_code[2:8].zfill(6)
+    code = str(row.get("code", "") or "").zfill(6)
+    return f"SH{code}" if code.startswith(("5", "6", "9")) else f"SZ{code}"
 
 
 def _yi(value) -> float:

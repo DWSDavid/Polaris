@@ -131,3 +131,21 @@ def test_missing_daily_history_does_not_fake_a_ma60_breakdown():
 
     assert facts["above_ma60"] is None
     assert "跌破60日均线" not in decision["risk_flags"]
+
+
+def test_stock_facts_include_bull_trap_pattern_when_history_loaded():
+    closes = [30 - i * 0.18 for i in range(65)] + [18.7, 19.4, 20.1]
+    daily = _daily(closes)
+    daily["main_net_inflow"] = [-20_000_000] * 65 + [-80_000_000, -60_000_000, -50_000_000]
+
+    facts = build_stock_facts(
+        stock={"code": "601688", "symbol": "SH601688", "name": "华泰证券", "latest_price": closes[-1], "volume_ratio": 1.8},
+        daily=daily,
+        flow=pd.DataFrame(),
+        sector={"sector": "证券", "state": "龙头孤立", "inflow_10d": -1_000_000_000},
+    )
+    decision = evaluate_stock_setup(facts)
+
+    assert facts["pattern_risk"]["label"] == "疑似诱多风险"
+    assert facts["historical_trap"]["sample_count"] >= 0
+    assert "疑似诱多风险" in decision["risk_flags"]

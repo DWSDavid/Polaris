@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import time
 
 import akshare as ak
@@ -15,6 +15,7 @@ CACHE_SOURCE = "em_context"
 CACHE_TS_COL = "__cached_at"
 TTL_SECONDS = 24 * 60 * 60
 HOT_RANK_TTL_SECONDS = 600
+DRAGON_TIGER_TTL_SECONDS = 600
 HOT_RANK_URL = "https://emappdata.eastmoney.com/stockrank/getAllCurrentList"
 HOT_RANK_QUOTE_URL = "https://push2delay.eastmoney.com/api/qt/ulist.np/get"
 HOT_RANK_HEADERS = {
@@ -50,11 +51,13 @@ def hot_rank(limit: int = 100, force: bool = False) -> pd.DataFrame:
 
 def dragon_tiger(day: str | None = None, force: bool = False) -> pd.DataFrame:
     query_day = day or date.today().strftime("%Y%m%d")
-    cached = None if force else _read_ttl("dragon_tiger", query_day)
+    key = query_day if day else "latest"
+    cached = None if force else _read_ttl("dragon_tiger", key, DRAGON_TIGER_TTL_SECONDS)
     if cached is not None:
         return cached
-    out = _normalize_dragon_tiger(_raw_dragon_tiger(query_day))
-    _write_ttl("dragon_tiger", query_day, out)
+    raw = _raw_dragon_tiger(query_day) if day else _raw_latest_dragon_tiger(query_day)
+    out = _normalize_dragon_tiger(raw)
+    _write_ttl("dragon_tiger", key, out)
     return out
 
 
@@ -84,16 +87,17 @@ def _raw_northbound_flow() -> pd.DataFrame:
 
 def _raw_hot_rank() -> pd.DataFrame:
     last_error = None
+    try:
+        return _raw_hot_rank_from_eastmoney()
+    except Exception as exc:
+        last_error = exc
     for _ in range(3):
         try:
             return ak.stock_hot_rank_em()
         except Exception as exc:
             last_error = exc
             time.sleep(1)
-    try:
-        return _raw_hot_rank_from_eastmoney()
-    except Exception:
-        raise last_error
+    raise last_error
 
 
 def _raw_hot_rank_from_eastmoney() -> pd.DataFrame:
@@ -108,7 +112,7 @@ def _raw_hot_rank_from_eastmoney() -> pd.DataFrame:
         HOT_RANK_URL,
         json=payload,
         headers=HOT_RANK_HEADERS,
-        timeout=20,
+        timeout=12,
     )
     rank_response.raise_for_status()
     rank_rows = rank_response.json().get("data") or []
@@ -126,14 +130,17 @@ def _raw_hot_rank_from_eastmoney() -> pd.DataFrame:
         "fields": "f14,f3,f12,f2",
         "secids": ",".join(rank["mark"].dropna().astype(str)),
     }
-    quote_response = requests.get(
-        HOT_RANK_QUOTE_URL,
-        params=params,
-        headers=HOT_RANK_HEADERS,
-        timeout=20,
-    )
-    quote_response.raise_for_status()
-    quote = pd.DataFrame((quote_response.json().get("data") or {}).get("diff") or [])
+    try:
+        quote_response = requests.get(
+            HOT_RANK_QUOTE_URL,
+            params=params,
+            headers=HOT_RANK_HEADERS,
+            timeout=8,
+        )
+        quote_response.raise_for_status()
+        quote = pd.DataFrame((quote_response.json().get("data") or {}).get("diff") or [])
+    except Exception:
+        quote = pd.DataFrame(columns=["f12", "f14", "f2", "f3"])
     if quote.empty:
         quote = pd.DataFrame(columns=["f12", "f14", "f2", "f3"])
 
@@ -153,6 +160,19 @@ def _raw_hot_rank_from_eastmoney() -> pd.DataFrame:
 
 def _raw_dragon_tiger(day: str) -> pd.DataFrame:
     return ak.stock_lhb_detail_em(start_date=day, end_date=day)
+
+
+def _raw_latest_dragon_tiger(start_day: str, lookback_days: int = 10) -> pd.DataFrame:
+    start = datetime.strptime(start_day, "%Y%m%d").date()
+    for offset in range(lookback_days + 1):
+        day = (start - timedelta(days=offset)).strftime("%Y%m%d")
+        try:
+            raw = _raw_dragon_tiger(day)
+        except Exception:
+            continue
+        if raw is not None and not raw.empty:
+            return raw
+    return pd.DataFrame()
 
 
 def _raw_research_reports(symbol: str) -> pd.DataFrame:

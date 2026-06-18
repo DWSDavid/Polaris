@@ -1,3 +1,5 @@
+from datetime import date as real_date
+
 import pandas as pd
 
 from src.data import em_context as ctx
@@ -94,12 +96,39 @@ def test_raw_hot_rank_retries_transient_error(monkeypatch):
         )
 
     monkeypatch.setattr(ctx.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        ctx,
+        "_raw_hot_rank_from_eastmoney",
+        lambda: (_ for _ in ()).throw(ValueError("direct rank blocked")),
+    )
     monkeypatch.setattr(ctx.ak, "stock_hot_rank_em", fake_hot_rank)
 
     got = ctx._raw_hot_rank()
 
     assert calls["count"] == 2
     assert got.loc[0, "股票名称"] == "风华高科"
+
+
+def test_raw_hot_rank_from_eastmoney_returns_rank_when_quote_times_out(monkeypatch):
+    class RankResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"sc": "SZ000725", "rk": 1}, {"sc": "SH601138", "rk": 2}]}
+
+    def quote_timeout(*args, **kwargs):
+        raise ctx.requests.ReadTimeout("quote timed out")
+
+    monkeypatch.setattr(ctx.requests, "post", lambda *args, **kwargs: RankResponse())
+    monkeypatch.setattr(ctx.requests, "get", quote_timeout)
+
+    got = ctx._raw_hot_rank_from_eastmoney()
+
+    assert got.loc[0, "当前排名"] == 1
+    assert got.loc[0, "代码"] == "SZ000725"
+    assert got.loc[1, "代码"] == "SH601138"
+    assert pd.isna(got.loc[0, "最新价"])
 
 
 def test_raw_hot_rank_falls_back_to_eastmoney_delay_json(monkeypatch):
@@ -180,6 +209,45 @@ def test_dragon_tiger_normalizes_real_columns(tmp_path, monkeypatch):
     assert got.loc[0, "trade_date"] == "2026-06-16"
     assert got.loc[0, "net_buy"] == 5e7
     assert got.loc[0, "reason"].startswith("有价格涨跌幅限制")
+
+
+def test_dragon_tiger_latest_falls_back_to_previous_nonempty_day(tmp_path, monkeypatch):
+    from src.data import cache
+
+    class FakeDate(real_date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 6, 18)
+
+    cache.CACHE_DIR = tmp_path
+    calls = []
+    raw = pd.DataFrame(
+        {
+            "代码": ["000100"],
+            "名称": ["TCL科技"],
+            "上榜日": ["2026-06-17"],
+            "龙虎榜净买额": [9.99e8],
+            "上榜原因": ["日涨幅偏离值达到7%的前5只证券"],
+        }
+    )
+
+    def fake_raw(day):
+        calls.append(day)
+        if day == "20260618":
+            raise TypeError("'NoneType' object is not subscriptable")
+        if day == "20260617":
+            return raw
+        return pd.DataFrame()
+
+    monkeypatch.setattr(ctx, "date", FakeDate)
+    monkeypatch.setattr(ctx, "_raw_dragon_tiger", fake_raw)
+
+    got = ctx.dragon_tiger(force=True)
+
+    assert calls[:2] == ["20260618", "20260617"]
+    assert got.loc[0, "code"] == "000100"
+    assert got.loc[0, "trade_date"] == "2026-06-17"
+    assert got.loc[0, "net_buy"] == 9.99e8
 
 
 def test_research_reports_normalizes_real_columns(tmp_path, monkeypatch):

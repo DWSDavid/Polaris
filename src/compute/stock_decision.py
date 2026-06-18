@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from src.compute.cycle import box_range, cum_inflow, midterm_trend, position_in_box
+from src.compute.pattern_risk import detect_bull_trap_risk, historical_trap_report
 
 
 POSITIVE_SECTOR_STATES = {"主升扩散", "冷启动", "低位修复"}
@@ -68,6 +69,10 @@ def build_stock_facts(
         "sector_turning_point": bool(sector_data.get("turning_point", False)),
         "sector_top_leaders": str(sector_data.get("top_leaders", "")),
     }
+    history_for_pattern = _history_with_flow(daily, flow)
+    if not history_for_pattern.empty:
+        facts["pattern_risk"] = detect_bull_trap_risk(history_for_pattern)
+        facts["historical_trap"] = historical_trap_report(history_for_pattern)
     facts["relative_to_sector_today"] = round(facts["pct_chg"] - facts["sector_pct_chg"], 3)
     if holding_cost > 0 and price > 0:
         facts["holding_cost"] = holding_cost
@@ -130,6 +135,11 @@ def evaluate_stock_setup(facts: dict) -> dict:
         score -= 1.5
     if _num(facts.get("holding_return")) <= -0.10:
         score -= 1.5
+    pattern_score = _num((facts.get("pattern_risk") or {}).get("risk_score"))
+    if pattern_score >= 0.7:
+        score -= 1.5
+    elif pattern_score >= 0.45:
+        score -= 0.7
 
     volume_ratio = _num(facts.get("volume_ratio"), 1.0)
     if 1.1 <= volume_ratio <= 2.5:
@@ -187,6 +197,8 @@ def _risk_flags(facts: dict) -> list[str]:
         flags.append("个股资金连续流出")
     if _num(facts.get("volume_ratio"), 1.0) >= 3.0:
         flags.append("放量过猛")
+    if (facts.get("pattern_risk") or {}).get("label") == "疑似诱多风险":
+        flags.append("疑似诱多风险")
     return flags
 
 
@@ -199,7 +211,27 @@ def _watch_points(facts: dict, stance: str) -> list[str]:
     ]
     if stance == "不追高，等回踩确认":
         points.insert(0, "箱体高位不追，等回踩或放量换手后的二次确认")
+    if (facts.get("pattern_risk") or {}).get("label") == "疑似诱多风险":
+        points.insert(0, "先看反弹能否站回60日线且资金转正，避免只接最后一段反抽")
     return points
+
+
+def _history_with_flow(daily: pd.DataFrame, flow: pd.DataFrame | None) -> pd.DataFrame:
+    if daily is None or daily.empty or "close" not in daily.columns:
+        return pd.DataFrame()
+    history = daily.copy()
+    if "main_net_inflow" in history.columns:
+        return history
+    flow_values = _flow_values(flow)
+    if flow_values.empty:
+        return history
+    history = history.reset_index(drop=True)
+    flow_tail = flow_values.reset_index(drop=True).tail(len(history)).reset_index(drop=True)
+    if len(flow_tail) < len(history):
+        pad = pd.Series([0.0] * (len(history) - len(flow_tail)))
+        flow_tail = pd.concat([pad, flow_tail], ignore_index=True)
+    history["main_net_inflow"] = flow_tail.tail(len(history)).to_numpy()
+    return history
 
 
 def _as_dict(value) -> dict:

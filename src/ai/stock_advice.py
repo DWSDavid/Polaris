@@ -18,7 +18,7 @@ def build_stock_advice_prompt(facts: dict) -> str:
         [
             "请用类 TradingAgents 的多角色视角，但只做一段中文决策解释。",
             conclusion_first_instruction(),
-            "必须分 5 点：1. 技术面；2. 资金面；3. 行业背景；4. 风控；5. 今日观察。",
+            "必须分 6 点：1. 技术面；2. 资金面；3. 行业背景；4. 历史陷阱；5. 风控；6. 今日观察。",
             "每一点只能引用下方真实事实。不要编造，不给买卖指令。",
             "真实事实：",
             *_fact_lines(facts),
@@ -53,6 +53,8 @@ def _fact_lines(facts: dict) -> list[str]:
         f"- 技术面：20日均线{_yes_no(facts.get('above_ma20'))}，60日均线{_yes_no(facts.get('above_ma60'))}，20日涨跌{_num(facts.get('return_20d')):+.2f}%，60日涨跌{_num(facts.get('return_60d')):+.2f}%",
         f"- 箱体位置：{_box_label(facts.get('position_in_box'))}，60日高点回撤：{_num(facts.get('drawdown_60d')):.1%}",
         f"- 个股资金：5日主力{_money(facts.get('stock_inflow_5d'))}，10日主力{_money(facts.get('stock_inflow_10d'))}",
+        _pattern_line(facts),
+        _history_trap_line(facts),
         f"- 量能估值：量比{_num(facts.get('volume_ratio')):.2f}，换手{_num(facts.get('turnover_rate')):.2f}%，市盈率{_optional(facts.get('pe_ttm'))}，市净率{_optional(facts.get('pb'))}",
         f"- 核心理由：{_join(decision.get('reasons') or [])}",
         f"- 风险提示：{_join(decision.get('risk_flags') or ['暂无明显结构性风险'])}",
@@ -72,8 +74,37 @@ def _local_stock_summary(facts: dict) -> str:
         f"1. 技术面：20日均线{_yes_no(facts.get('above_ma20'))}，60日均线{_yes_no(facts.get('above_ma60'))}，箱体位置{_box_label(facts.get('position_in_box'))}。"
         f"2. 资金面：5日主力{_money(facts.get('stock_inflow_5d'))}，10日主力{_money(facts.get('stock_inflow_10d'))}。"
         f"3. 行业背景：{facts.get('sector', '所属行业')}处于{facts.get('sector_state', '未知')}。"
-        f"4. 风控：{risks}。5. 今日观察：{reasons or '等待更多共振'}。"
+        f"4. 历史陷阱：{_pattern_brief(facts)}。5. 风控：{risks}。6. 今日观察：{reasons or '等待更多共振'}。"
     )
+
+
+def _pattern_line(facts: dict) -> str:
+    pattern = facts.get("pattern_risk") or {}
+    if not pattern:
+        return "- 历史陷阱：日线样本不足，暂不判断诱多风险"
+    reasons = _join(pattern.get("reasons") or ["暂无明显陷阱理由"])
+    return (
+        f"- 历史陷阱：{pattern.get('label', '未判断')}，"
+        f"风险分{_num(pattern.get('risk_score')):.2f}，理由：{reasons}"
+    )
+
+
+def _history_trap_line(facts: dict) -> str:
+    report = facts.get("historical_trap") or {}
+    sample_count = int(_num(report.get("sample_count")))
+    median = _num(report.get("median_forward_return_5d"))
+    win_rate = _num(report.get("win_rate_5d"))
+    return (
+        f"- 历史相似：样本{sample_count}个，5日中位收益{median:+.1%}，"
+        f"5日胜率{win_rate:.0%}，{report.get('summary', '样本不足')}"
+    )
+
+
+def _pattern_brief(facts: dict) -> str:
+    pattern = facts.get("pattern_risk") or {}
+    if not pattern:
+        return "日线样本不足，暂不判断诱多风险"
+    return f"{pattern.get('label', '未判断')}，风险分{_num(pattern.get('risk_score')):.2f}"
 
 
 def _yes_no(value) -> str:
